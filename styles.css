@@ -63,9 +63,38 @@ header h1 {
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .link-btn:hover {
   background: rgba(255, 255, 255, 0.35);
+}
+
+.cloud-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  background: #94a3b8;
+  box-shadow: 0 0 0 0 rgba(255,255,255,0.4);
+}
+.cloud-dot.on {
+  background: #22c55e;
+  animation: cloudPulse 2s infinite;
+}
+.cloud-dot.syncing {
+  background: #facc15;
+}
+.cloud-dot.error {
+  background: #ef4444;
+}
+.cloud-dot.off {
+  background: rgba(255,255,255,0.5);
+}
+@keyframes cloudPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.6); }
+  50% { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
 }
 
 .tabs {

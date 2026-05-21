@@ -42,8 +42,10 @@ function loadState() {
   }
 }
 
-function saveState() {
+function saveState(syncCloud = true) {
+  state.lastUpdate = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (syncCloud) pushToCloud();
 }
 
 // ---------------- Date helpers ----------------
@@ -751,6 +753,202 @@ function buildBoardMonthTable(year, month, dayInfo, actColorMap) {
   table += '</tbody></table>';
   return table;
 }
+
+// ---------------- Cloud Sync (Firebase Firestore) ----------------
+const CLOUD_CFG_KEY = 'summerCampPlanner_cloudConfig_v1';
+const CLOUD_GROUP_KEY = 'summerCampPlanner_groupCode_v1';
+
+let cloudState = {
+  active: false,
+  doc: null,
+  unsubscribe: null,
+  writeTimeout: null,
+  applyingRemote: false,
+  groupCode: null,
+};
+
+function setCloudIndicator(status, label) {
+  const dot = document.getElementById('cloud-dot');
+  const labelEl = document.getElementById('cloud-label');
+  if (!dot) return;
+  dot.className = 'cloud-dot ' + status;
+  if (label) labelEl.textContent = label;
+}
+
+async function initCloud() {
+  const cfgRaw = localStorage.getItem(CLOUD_CFG_KEY);
+  const groupCode = localStorage.getItem(CLOUD_GROUP_KEY);
+  if (!cfgRaw || !groupCode) {
+    setCloudIndicator('off', 'סנכרון');
+    return;
+  }
+  try {
+    const cfg = JSON.parse(cfgRaw);
+    setCloudIndicator('syncing', 'מתחבר...');
+    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
+    const { getFirestore, doc, setDoc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js');
+    const app = initializeApp(cfg);
+    const db = getFirestore(app);
+    cloudState.doc = doc(db, 'camps', groupCode);
+    cloudState.setDoc = setDoc;
+    cloudState.groupCode = groupCode;
+
+    cloudState.unsubscribe = onSnapshot(cloudState.doc, snap => {
+      if (!snap.exists()) {
+        pushToCloud(true); // initial seed
+        return;
+      }
+      const remote = snap.data();
+      if (!remote || !remote.lastUpdate) return;
+      if (remote.lastUpdate <= (state.lastUpdate || 0)) return;
+      cloudState.applyingRemote = true;
+      state = { counselors: remote.counselors || [], activities: remote.activities || [], lastUpdate: remote.lastUpdate };
+      saveState(false);
+      initRender();
+      cloudState.applyingRemote = false;
+      setCloudIndicator('on', 'מסונכרן');
+    }, err => {
+      console.error('cloud onSnapshot error', err);
+      setCloudIndicator('error', 'שגיאה');
+    });
+
+    cloudState.active = true;
+    setCloudIndicator('on', 'מסונכרן');
+  } catch (err) {
+    console.error('initCloud error', err);
+    setCloudIndicator('error', 'שגיאה');
+  }
+}
+
+function pushToCloud(force = false) {
+  if (!cloudState.active || cloudState.applyingRemote) return;
+  clearTimeout(cloudState.writeTimeout);
+  cloudState.writeTimeout = setTimeout(async () => {
+    try {
+      setCloudIndicator('syncing', 'שומר...');
+      await cloudState.setDoc(cloudState.doc, {
+        counselors: state.counselors,
+        activities: state.activities,
+        lastUpdate: state.lastUpdate || Date.now(),
+      });
+      setCloudIndicator('on', 'מסונכרן');
+    } catch (err) {
+      console.error('pushToCloud error', err);
+      setCloudIndicator('error', 'שגיאה');
+    }
+  }, force ? 0 : 400);
+}
+
+function disconnectCloud() {
+  if (cloudState.unsubscribe) cloudState.unsubscribe();
+  cloudState = { active: false, doc: null, unsubscribe: null, writeTimeout: null, applyingRemote: false, groupCode: null };
+  localStorage.removeItem(CLOUD_CFG_KEY);
+  localStorage.removeItem(CLOUD_GROUP_KEY);
+  setCloudIndicator('off', 'סנכרון');
+}
+
+// ---- Cloud UI ----
+document.getElementById('btn-cloud').addEventListener('click', () => {
+  showCloudModal();
+});
+document.getElementById('btn-close-cloud').addEventListener('click', () => closeCloudModal());
+document.getElementById('cloud-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeCloudModal();
+});
+
+function showCloudModal() {
+  const overlay = document.getElementById('cloud-overlay');
+  const connectedView = document.getElementById('cloud-connected-view');
+  const setupView = document.getElementById('cloud-setup-view');
+  const statusEl = document.getElementById('cloud-status-display');
+
+  if (cloudState.active) {
+    connectedView.hidden = false;
+    setupView.hidden = true;
+    document.getElementById('cloud-group-display').value = cloudState.groupCode;
+    statusEl.className = 'warning-box success';
+    statusEl.innerHTML = '✅ מחובר לענן — שינויים מסתנכרנים אוטומטית עם כל מי שמזין את אותו קוד קבוצה.';
+  } else {
+    connectedView.hidden = true;
+    setupView.hidden = false;
+    statusEl.className = 'warning-box info';
+    statusEl.innerHTML = '💡 סנכרון בענן מאפשר ל-4 המדריכים לראות את אותם נתונים מכל מכשיר. הגדרה חד-פעמית.';
+    // Pre-fill with previous values
+    const cfg = localStorage.getItem(CLOUD_CFG_KEY);
+    const code = localStorage.getItem(CLOUD_GROUP_KEY);
+    if (cfg) document.getElementById('cloud-config-input').value = cfg;
+    if (code) document.getElementById('cloud-group-input').value = code;
+  }
+  overlay.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCloudModal() {
+  document.getElementById('cloud-overlay').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+document.getElementById('btn-connect-cloud').addEventListener('click', async () => {
+  const errorEl = document.getElementById('cloud-error');
+  errorEl.hidden = true;
+  let cfgText = document.getElementById('cloud-config-input').value.trim();
+  const groupCode = document.getElementById('cloud-group-input').value.trim();
+
+  if (!groupCode) {
+    errorEl.hidden = false;
+    errorEl.textContent = 'חסר קוד קבוצה.';
+    return;
+  }
+
+  try {
+    // Allow JS-style config (with unquoted keys) by extracting via regex
+    if (!cfgText.startsWith('{')) throw new Error('הקונפיג חייב להתחיל ב-{');
+    let cfg;
+    try {
+      cfg = JSON.parse(cfgText);
+    } catch (e) {
+      // Try to convert JS object literal to JSON
+      const fixed = cfgText
+        .replace(/(\w+):/g, '"$1":')
+        .replace(/'/g, '"')
+        .replace(/,(\s*[}\]])/g, '$1');
+      cfg = JSON.parse(fixed);
+    }
+    if (!cfg.apiKey || !cfg.projectId) throw new Error('קונפיג לא תקין — חסר apiKey או projectId');
+
+    localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cfg));
+    localStorage.setItem(CLOUD_GROUP_KEY, groupCode);
+    await initCloud();
+    if (cloudState.active) {
+      closeCloudModal();
+      alert('✅ חובר בהצלחה! שתף את קוד הקבוצה "' + groupCode + '" עם 3 המדריכים האחרים.');
+    } else {
+      errorEl.hidden = false;
+      errorEl.textContent = 'החיבור נכשל. בדוק את הקונפיג ונסה שוב.';
+    }
+  } catch (err) {
+    errorEl.hidden = false;
+    errorEl.textContent = 'שגיאה: ' + err.message;
+  }
+});
+
+document.getElementById('btn-disconnect-cloud').addEventListener('click', () => {
+  if (!confirm('להתנתק מהסנכרון? הנתונים יישארו במכשיר הזה אבל לא יסתנכרנו יותר.')) return;
+  disconnectCloud();
+  closeCloudModal();
+});
+
+document.getElementById('btn-copy-group-code').addEventListener('click', () => {
+  navigator.clipboard.writeText(cloudState.groupCode || '').then(() => {
+    const btn = document.getElementById('btn-copy-group-code');
+    const old = btn.textContent;
+    btn.textContent = '✓ הועתק';
+    setTimeout(() => btn.textContent = old, 1500);
+  });
+});
+
+// Kick off cloud after initial render
+initCloud();
 
 // ---------------- PWA Service Worker ----------------
 if ('serviceWorker' in navigator) {

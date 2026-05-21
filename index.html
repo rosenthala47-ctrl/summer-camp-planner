@@ -18,6 +18,10 @@
   <h1>🌞 מתכנן חופש גדול</h1>
   <p class="subtitle">תכנון פעילויות לחניכים — 18.6.2026 עד 26.8.2026</p>
   <div class="header-actions">
+    <button id="btn-cloud" class="link-btn" title="סנכרון בענן">
+      <span id="cloud-icon">☁️</span> <span id="cloud-label">סנכרון</span>
+      <span id="cloud-dot" class="cloud-dot off"></span>
+    </button>
     <button id="btn-export" class="link-btn">📤 ייצוא נתונים</button>
     <button id="btn-import" class="link-btn">📥 ייבוא נתונים</button>
     <input type="file" id="import-file" accept=".json" hidden>
@@ -112,6 +116,72 @@
 <button id="btn-update-board" class="fab" title="עדכן לוח חופש">
   🗓️ עדכן לוח
 </button>
+
+<!-- Cloud Sync Modal -->
+<div id="cloud-overlay" class="board-overlay hidden">
+  <div class="board-modal" style="max-width:640px">
+    <div class="board-toolbar">
+      <h3 style="margin:0;flex:1;font-size:18px">☁️ סנכרון בענן (Firebase)</h3>
+      <button id="btn-close-cloud" class="secondary">✕ סגור</button>
+    </div>
+    <div style="padding:24px">
+      <div id="cloud-status-display" class="warning-box info" style="margin-bottom:18px"></div>
+
+      <div id="cloud-connected-view" hidden>
+        <h4 style="margin-bottom:8px">🟢 מחובר</h4>
+        <p style="color:var(--muted);margin-bottom:14px">כל שינוי מסתנכרן אוטומטית עם 4 המדריכים.</p>
+        <div class="form-row">
+          <label>קוד הקבוצה:
+            <input type="text" id="cloud-group-display" readonly style="font-family:monospace;background:#f1f5f9">
+          </label>
+        </div>
+        <button id="btn-copy-group-code" class="secondary">📋 העתק קוד</button>
+        <button id="btn-disconnect-cloud" class="danger" style="margin-right:10px">🔌 התנתק</button>
+        <p style="margin-top:16px;font-size:13px;color:var(--muted)">
+          שלח את קוד הקבוצה ל-3 המדריכים האחרים. הם יזינו אותו בטלפון שלהם וכל השינויים יסתנכרנו בזמן אמת.
+        </p>
+      </div>
+
+      <div id="cloud-setup-view">
+        <details style="margin-bottom:18px" open>
+          <summary style="cursor:pointer;font-weight:700;font-size:15px;padding:8px 0">📖 איך מקימים פרויקט Firebase (פעם אחת, חינם, 5 דקות)</summary>
+          <ol style="padding-right:20px;line-height:1.9;font-size:14px">
+            <li>נכנסים ל-<a href="https://console.firebase.google.com/" target="_blank">console.firebase.google.com</a> (עם חשבון Google).</li>
+            <li>לוחצים <b>Add project</b> → שם: <code>summer-camp-planner</code> → ממשיכים (אפשר לדלג על Google Analytics).</li>
+            <li>אחרי שהפרויקט נוצר, בתפריט הצד: <b>Build → Firestore Database → Create database</b>.</li>
+            <li>בוחרים <b>Start in test mode</b> → אזור <code>europe-west</code> → Enable.</li>
+            <li>חוזרים ל-<b>Project settings</b> (גלגל שיניים למעלה) → <b>General</b> → גוללים למטה ל-<b>Your apps</b> → לוחצים על אייקון ה-<b>Web (&lt;/&gt;)</b>.</li>
+            <li>נותנים כינוי לאפליקציה → <b>Register app</b>.</li>
+            <li>מעתיקים את אובייקט <code>firebaseConfig</code> שמופיע (החלק שמתחיל ב-<code>{ apiKey: "...", ... }</code>) ומדביקים פה למטה.</li>
+          </ol>
+        </details>
+
+        <div class="form-row">
+          <label style="grid-column:1/-1">הדבק כאן את firebaseConfig (כולל הסוגריים):
+            <textarea id="cloud-config-input" rows="9" style="font-family:monospace;font-size:12px;padding:10px;direction:ltr;text-align:left" placeholder='{
+  "apiKey": "AIza...",
+  "authDomain": "...",
+  "projectId": "...",
+  "storageBucket": "...",
+  "messagingSenderId": "...",
+  "appId": "..."
+}'></textarea>
+          </label>
+        </div>
+
+        <div class="form-row">
+          <label>קוד קבוצה (יוצרים פעם אחת ומשתפים עם המדריכים):
+            <input type="text" id="cloud-group-input" placeholder="למשל: kayitz-tzofim-2026" autocomplete="off">
+          </label>
+        </div>
+
+        <div id="cloud-error" class="warning-box danger" hidden></div>
+
+        <button id="btn-connect-cloud" class="primary" style="width:100%;margin-top:12px">☁️ התחבר וסנכרן</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Schedule Board Modal -->
 <div id="board-overlay" class="board-overlay hidden">
