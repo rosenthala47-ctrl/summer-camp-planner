@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מתכנן חופש גדול</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1>🌞 מתכנן חופש גדול</h1>
+  <p class="subtitle">תכנון פעילויות לחניכים — 18.6.2026 עד 26.8.2026</p>
+  <div class="header-actions">
+    <button id="btn-export" class="link-btn">📤 ייצוא נתונים</button>
+    <button id="btn-import" class="link-btn">📥 ייבוא נתונים</button>
+    <input type="file" id="import-file" accept=".json" hidden>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="counselors">👥 מדריכים</button>
+  <button class="tab" data-tab="vacations">🏖️ חופשות מדריכים</button>
+  <button class="tab" data-tab="activities">🎯 פעילויות</button>
+  <button class="tab" data-tab="calendar">📅 לוח קיץ</button>
+</nav>
+
+<main>
+  <!-- Counselors tab -->
+  <section id="tab-counselors" class="tab-content active">
+    <h2>הגדרת המדריכים</h2>
+    <p class="hint">הזן את שמות 4 המדריכים ואת המגדר של כל אחד. הסדר: 2 מדריכים, 2 מדריכות.</p>
+    <div id="counselors-list"></div>
+  </section>
+
+  <!-- Vacations tab -->
+  <section id="tab-vacations" class="tab-content">
+    <h2>חופשות וימים שאין אפשרות</h2>
+    <p class="hint">בחר מדריך, לחץ על תאריך כדי לסמן שהוא לא יכול באותו יום. לחיצה נוספת מבטלת.</p>
+    <div class="counselor-selector">
+      <label>מדריך/ה:</label>
+      <select id="vacation-counselor-select"></select>
+    </div>
+    <div id="vacation-calendar"></div>
+  </section>
+
+  <!-- Activities tab -->
+  <section id="tab-activities" class="tab-content">
+    <h2>פעילויות החופש</h2>
+    <p class="hint">הוסף פעילות — תאריך התחלה, מספר ימים, וסוג (כל המחנה / טיול בנים / טיול בנות / מפוצל). האפליקציה תזהיר אם יש מדריך שלא יכול באותם ימים.</p>
+
+    <form id="activity-form" class="card">
+      <input type="hidden" id="activity-id">
+      <div class="form-row">
+        <label>שם הפעילות:
+          <input type="text" id="activity-name" required placeholder="למשל: טיול לכנרת">
+        </label>
+        <label>תאריך התחלה:
+          <input type="date" id="activity-date" min="2026-06-18" max="2026-08-26" required>
+        </label>
+        <label>מספר ימים:
+          <input type="number" id="activity-days" min="1" max="70" value="1" required>
+        </label>
+      </div>
+      <div class="form-row">
+        <label>סוג הפעילות:
+          <select id="activity-type" required>
+            <option value="all">כל המחנה — כל 4 המדריכים נוכחים</option>
+            <option value="split">מפוצל לפי מגדר — כולם נוכחים (בנים עם המדריכים, בנות עם המדריכות)</option>
+            <option value="boys">בנים בלבד — צריך 2 מדריכים (בנים)</option>
+            <option value="girls">בנות בלבד — צריך 2 מדריכות (בנות)</option>
+          </select>
+        </label>
+        <label>הערות (אופציונלי):
+          <input type="text" id="activity-notes" placeholder="כל מידע נוסף">
+        </label>
+      </div>
+      <div class="form-row">
+        <button type="submit" class="primary">💾 שמור פעילות</button>
+        <button type="button" id="activity-cancel" class="secondary" hidden>ביטול</button>
+        <button type="button" id="activity-suggest" class="secondary">💡 הצע תאריך פנוי</button>
+      </div>
+      <div id="activity-warning"></div>
+    </form>
+
+    <h3>פעילויות שהוזנו</h3>
+    <div id="activities-list"></div>
+  </section>
+
+  <!-- Calendar tab -->
+  <section id="tab-calendar" class="tab-content">
+    <h2>לוח הקיץ</h2>
+    <p class="hint">תצוגת כל הקיץ. כל יום מציג: מי לא נוכח (אם יש), והפעילות שתוכננה (אם יש). אדום = קונפליקט.</p>
+    <div class="legend">
+      <span class="legend-item"><span class="dot dot-free"></span>פנוי</span>
+      <span class="legend-item"><span class="dot dot-activity"></span>פעילות מתוכננת</span>
+      <span class="legend-item"><span class="dot dot-unavail"></span>מדריך בחופש</span>
+      <span class="legend-item"><span class="dot dot-conflict"></span>קונפליקט</span>
+    </div>
+    <div id="summary-stats" class="stats"></div>
+    <div id="summer-calendar"></div>
+  </section>
+</main>
+
+<footer>
+  <p>הנתונים נשמרים בדפדפן שלך. השתמש ב"ייצוא נתונים" כדי לשתף עם מדריכים אחרים.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
