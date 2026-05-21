@@ -563,6 +563,195 @@ function initRender() {
 
 initRender();
 
+// ---------------- Schedule Board ----------------
+const ACTIVITY_COLORS = [
+  { bg:'#ede9fe', text:'#5b21b6', dot:'#7c3aed' },
+  { bg:'#cffafe', text:'#0e7490', dot:'#06b6d4' },
+  { bg:'#dcfce7', text:'#15803d', dot:'#16a34a' },
+  { bg:'#fef9c3', text:'#854d0e', dot:'#ca8a04' },
+  { bg:'#fee2e2', text:'#991b1b', dot:'#dc2626' },
+  { bg:'#fce7f3', text:'#9d174d', dot:'#ec4899' },
+  { bg:'#dbeafe', text:'#1e40af', dot:'#3b82f6' },
+  { bg:'#d1fae5', text:'#065f46', dot:'#059669' },
+];
+
+const TYPE_CLASS = { all:'act-all', split:'act-split', boys:'act-boys', girls:'act-girls' };
+const TYPE_LABEL = { all:'כל המחנה', split:'מפוצל', boys:'בנים בלבד', girls:'בנות בלבד' };
+const COUNSELOR_COLORS = ['#3b82f6','#8b5cf6','#ec4899','#f97316'];
+
+document.getElementById('btn-update-board').addEventListener('click', () => {
+  renderBoard();
+  document.getElementById('board-overlay').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+});
+
+document.getElementById('btn-close-board').addEventListener('click', closeBoard);
+document.getElementById('board-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeBoard();
+});
+document.getElementById('btn-print-board').addEventListener('click', () => window.print());
+
+function closeBoard() {
+  document.getElementById('board-overlay').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function renderBoard() {
+  const el = document.getElementById('board-content');
+
+  // Build activity color map (stable per activity id)
+  const actColorMap = {};
+  state.activities.forEach((a, i) => {
+    actColorMap[a.id] = ACTIVITY_COLORS[i % ACTIVITY_COLORS.length];
+  });
+
+  // Build day-info map
+  const dayInfo = {}; // iso → { activities: [...], unavailable: [...], conflicts: [...] }
+  state.activities.forEach(a => {
+    const issues = detectConflicts(a);
+    rangeISO(a.startDate, a.days).forEach(d => {
+      if (!dayInfo[d]) dayInfo[d] = { activities: [], unavailable: [], conflicts: [] };
+      dayInfo[d].activities.push(a);
+      if (issues.length) dayInfo[d].conflicts.push(a);
+    });
+  });
+  state.counselors.forEach((c, ci) => {
+    c.vacationDates.forEach(d => {
+      if (!dayInfo[d]) dayInfo[d] = { activities: [], unavailable: [], conflicts: [] };
+      dayInfo[d].unavailable.push({ ...c, colorIndex: ci });
+    });
+  });
+
+  // Count stats
+  let totalAct = 0, totalConflict = 0, freeDays = 0;
+  for (let d = parseISO(CAMP_START); d <= parseISO(CAMP_END); d.setDate(d.getDate() + 1)) {
+    const info = dayInfo[toISO(d)];
+    if (!info || (!info.activities.length && !info.unavailable.length)) freeDays++;
+    if (info?.activities.length) totalAct++;
+    if (info?.conflicts.length) totalConflict++;
+  }
+
+  const now = new Date();
+  const generatedStr = `${now.getDate()}.${now.getMonth()+1}.${now.getFullYear()}`;
+
+  // HTML
+  let html = `
+    <div class="board-header">
+      <div class="board-title">🌞 לוח חופש גדול</div>
+      <div class="board-subtitle">${formatHebrewDate(CAMP_START)} — ${formatHebrewDate(CAMP_END)} &nbsp;·&nbsp; ${countCampDays()} ימים</div>
+      <div class="board-counselors">
+        ${state.counselors.map((c,i) => `
+          <div class="board-counselor-chip ${c.gender}">
+            ${c.gender==='M'?'👦':'👧'} ${escapeHTML(c.name)}
+            ${c.vacationDates.length ? `<span style="font-weight:400;font-size:12px;opacity:0.7">(${c.vacationDates.length} ימי חופשה)</span>` : ''}
+          </div>`).join('')}
+      </div>
+      <div style="margin-top:12px;font-size:13px;color:#94a3b8">הופק ב-${generatedStr}</div>
+    </div>
+  `;
+
+  // Month sections
+  const months = monthsBetween(CAMP_START, CAMP_END);
+  months.forEach(({ year, month }) => {
+    html += `<div class="board-month-section">`;
+    html += `<div class="board-month-title">${HEBREW_MONTHS[month] || `${month}/${year}`}</div>`;
+    html += buildBoardMonthTable(year, month, dayInfo, actColorMap);
+    html += `</div>`;
+  });
+
+  // Activity index
+  if (state.activities.length) {
+    html += `<div class="board-index">`;
+    html += `<div class="board-index-title">📋 רשימת פעילויות</div>`;
+    html += `<div class="board-index-grid">`;
+    state.activities.forEach(a => {
+      const col = actColorMap[a.id];
+      const issues = detectConflicts(a);
+      const endDate = addDays(a.startDate, a.days - 1);
+      html += `
+        <div class="board-index-item">
+          <div class="board-index-dot" style="background:${col.dot}"></div>
+          <div class="board-index-info">
+            <div class="board-index-name">${escapeHTML(a.name)}</div>
+            <div class="board-index-meta">
+              ${formatHebrewDate(a.startDate)}${a.days>1?' – '+formatHebrewDate(endDate):''} · ${a.days} ${a.days===1?'יום':'ימים'}
+              <br>${TYPE_LABEL[a.type]}
+              ${a.notes ? `<br>📝 ${escapeHTML(a.notes)}` : ''}
+            </div>
+            ${issues.length ? `<div class="board-index-conflict">⚠️ ${issues[0]}${issues.length>1?` +${issues.length-1} נוספים`:''}</div>` : ''}
+          </div>
+        </div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  html += `<div class="board-footer-note">
+    ${totalAct} ימי פעילות · ${freeDays} ימים פנויים
+    ${totalConflict ? ` · <span style="color:#dc2626">⚠️ ${totalConflict} ימי קונפליקט</span>` : ' · ✅ ללא קונפליקטים'}
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+function buildBoardMonthTable(year, month, dayInfo, actColorMap) {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstWeekday = new Date(year, month - 1, 1).getDay(); // Sun=0
+
+  let table = `<table class="board-cal">
+    <thead><tr>
+      ${HEBREW_DAYS.map(d => `<th>${d}</th>`).join('')}
+    </tr></thead><tbody>`;
+
+  let day = 1 - firstWeekday; // may go negative (days before month start)
+  while (day <= daysInMonth) {
+    table += '<tr>';
+    for (let col = 0; col < 7; col++, day++) {
+      if (day < 1 || day > daysInMonth) {
+        table += '<td class="outside"></td>';
+        continue;
+      }
+      const iso = toISO(new Date(year, month - 1, day));
+      const inCamp = isInCamp(iso);
+      table += `<td${!inCamp ? ' class="outside"' : ''}>`;
+
+      if (inCamp) {
+        const info = dayInfo[iso] || { activities: [], unavailable: [], conflicts: [] };
+        const hasConflict = info.conflicts.length > 0;
+
+        table += `<div class="bd-date">${day}</div>`;
+        if (hasConflict) table += `<div class="bd-conflict-flag">⚠️</div>`;
+
+        // Show all activities for this day
+        info.activities.forEach(a => {
+          const col = actColorMap[a.id];
+          const isStart = a.startDate === iso;
+          const typeClass = TYPE_CLASS[a.type];
+          const contClass = isStart ? '' : ' act-cont';
+          const label = isStart ? escapeHTML(a.name) : '↩ ' + escapeHTML(a.name);
+          table += `<div class="bd-activity-bar ${typeClass}${contClass}" style="background:${col.bg};color:${col.text};border-right-color:${col.dot}" title="${escapeHTML(a.name)}">${label}</div>`;
+        });
+
+        // Unavailable counselor dots
+        if (info.unavailable.length) {
+          table += '<div class="bd-dots">';
+          info.unavailable.forEach(c => {
+            table += `<div class="bd-dot" style="background:${COUNSELOR_COLORS[state.counselors.findIndex(x=>x.id===c.id)%COUNSELOR_COLORS.length]}" title="${escapeHTML(c.name)} — בחופשה"></div>`;
+          });
+          table += '</div>';
+        }
+      } else {
+        table += `<div class="bd-date" style="color:#cbd5e1">${day}</div>`;
+      }
+
+      table += '</td>';
+    }
+    table += '</tr>';
+  }
+
+  table += '</tbody></table>';
+  return table;
+}
+
 // ---------------- PWA Service Worker ----------------
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
