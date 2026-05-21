@@ -758,6 +758,19 @@ function buildBoardMonthTable(year, month, dayInfo, actColorMap) {
 const CLOUD_CFG_KEY = 'summerCampPlanner_cloudConfig_v1';
 const CLOUD_GROUP_KEY = 'summerCampPlanner_groupCode_v1';
 
+// Built-in Firebase project (created by Ariel). All 4 counselors share the
+// same Firestore project and the same group code, so opening the URL is
+// enough — no manual setup needed.
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAqQE7B8v2J5M8Sv2VcN-sI6aWdpPP9wVE",
+  authDomain: "summer-camp-8aabd.firebaseapp.com",
+  projectId: "summer-camp-8aabd",
+  storageBucket: "summer-camp-8aabd.firebasestorage.app",
+  messagingSenderId: "77485499740",
+  appId: "1:77485499740:web:52b13f0275363fe9b48d99",
+};
+const DEFAULT_GROUP_CODE = 'main';
+
 let cloudState = {
   active: false,
   doc: null,
@@ -777,13 +790,9 @@ function setCloudIndicator(status, label) {
 
 async function initCloud() {
   const cfgRaw = localStorage.getItem(CLOUD_CFG_KEY);
-  const groupCode = localStorage.getItem(CLOUD_GROUP_KEY);
-  if (!cfgRaw || !groupCode) {
-    setCloudIndicator('off', 'סנכרון');
-    return;
-  }
+  const groupCode = localStorage.getItem(CLOUD_GROUP_KEY) || DEFAULT_GROUP_CODE;
   try {
-    const cfg = JSON.parse(cfgRaw);
+    const cfg = cfgRaw ? JSON.parse(cfgRaw) : DEFAULT_FIREBASE_CONFIG;
     setCloudIndicator('syncing', 'מתחבר...');
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
     const { getFirestore, doc, setDoc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js');
