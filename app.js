@@ -42,10 +42,11 @@ function loadState() {
   }
 }
 
-function saveState(syncCloud = true) {
+function saveState() {
+  // Persist to localStorage only. Cloud sync is now per-entity (granular)
+  // and is triggered explicitly by each mutation path.
   state.lastUpdate = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  if (syncCloud) pushToCloud();
 }
 
 // ---------------- Date helpers ----------------
@@ -186,6 +187,7 @@ function renderCounselors() {
       const field = e.target.dataset.field;
       state.counselors[idx][field] = e.target.value;
       saveState();
+      cloudWriteCounselor(state.counselors[idx]);
       renderCounselors();
       populateCounselorSelect();
     });
@@ -226,9 +228,11 @@ function renderVacationCalendar() {
       const isVac = counselor.vacationDates.includes(iso);
       if (isVac) {
         counselor.vacationDates = counselor.vacationDates.filter(d => d !== iso);
+        cloudRemoveVacation(counselor.id, iso);
       } else {
         counselor.vacationDates.push(iso);
         counselor.vacationDates.sort();
+        cloudAddVacation(counselor.id, iso);
       }
       saveState();
       renderVacationCalendar();
@@ -339,6 +343,7 @@ activityForm.addEventListener('submit', e => {
   }
   state.activities.sort((a, b) => a.startDate.localeCompare(b.startDate));
   saveState();
+  cloudWriteActivity(activity);
   resetActivityForm();
   renderActivities();
 });
@@ -402,6 +407,7 @@ function deleteActivity(id) {
   if (!confirm('למחוק את הפעילות?')) return;
   state.activities = state.activities.filter(a => a.id !== id);
   saveState();
+  cloudDeleteActivity(id);
   renderActivities();
 }
 
@@ -546,6 +552,7 @@ document.getElementById('import-file').addEventListener('change', e => {
       if (!confirm('להחליף את כל הנתונים הקיימים בנתונים מהקובץ?')) return;
       state = data;
       saveState();
+      cloudBulkReplace();
       initRender();
       alert('הנתונים יובאו בהצלחה');
     } catch (err) {
@@ -773,11 +780,13 @@ const DEFAULT_GROUP_CODE = 'main';
 
 let cloudState = {
   active: false,
-  doc: null,
-  unsubscribe: null,
-  writeTimeout: null,
-  applyingRemote: false,
+  db: null,
   groupCode: null,
+  unsubCounselors: null,
+  unsubActivities: null,
+  applyingRemote: false,
+  fns: null,
+  counselorWriteTimers: {},
 };
 
 function setCloudIndicator(status, label) {
@@ -795,33 +804,84 @@ async function initCloud() {
     const cfg = cfgRaw ? JSON.parse(cfgRaw) : DEFAULT_FIREBASE_CONFIG;
     setCloudIndicator('syncing', 'מתחבר...');
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
-    const { getFirestore, doc, setDoc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js');
+    const firestoreMod = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js');
+    const {
+      getFirestore, doc, setDoc, deleteDoc, updateDoc,
+      arrayUnion, arrayRemove, collection, onSnapshot, getDocs, writeBatch,
+    } = firestoreMod;
+
     const app = initializeApp(cfg);
     const db = getFirestore(app);
-    cloudState.doc = doc(db, 'camps', groupCode);
-    cloudState.setDoc = setDoc;
+    cloudState.db = db;
     cloudState.groupCode = groupCode;
+    cloudState.fns = { doc, setDoc, deleteDoc, updateDoc, arrayUnion, arrayRemove, collection, onSnapshot, getDocs, writeBatch };
+    cloudState.active = true;
 
-    cloudState.unsubscribe = onSnapshot(cloudState.doc, snap => {
-      if (!snap.exists()) {
-        pushToCloud(true); // initial seed
-        return;
-      }
-      const remote = snap.data();
-      if (!remote || !remote.lastUpdate) return;
-      if (remote.lastUpdate <= (state.lastUpdate || 0)) return;
+    const counselorsCol = collection(db, 'camps', groupCode, 'counselors');
+    const activitiesCol = collection(db, 'camps', groupCode, 'activities');
+
+    // Seed counselors if empty (first-ever connection for this group)
+    const seedSnap = await getDocs(counselorsCol);
+    if (seedSnap.empty) {
+      const batch = writeBatch(db);
+      const seed = state.counselors.length === 4 ? state.counselors : DEFAULT_STATE.counselors;
+      seed.forEach(c => {
+        batch.set(doc(db, 'camps', groupCode, 'counselors', c.id), {
+          id: c.id, name: c.name, gender: c.gender,
+          vacationDates: c.vacationDates || [],
+        });
+      });
+      // Also seed any local activities
+      state.activities.forEach(a => {
+        batch.set(doc(db, 'camps', groupCode, 'activities', a.id), a);
+      });
+      await batch.commit();
+    }
+
+    // Counselors live listener
+    cloudState.unsubCounselors = onSnapshot(counselorsCol, snap => {
       cloudState.applyingRemote = true;
-      state = { counselors: remote.counselors || [], activities: remote.activities || [], lastUpdate: remote.lastUpdate };
-      saveState(false);
-      initRender();
+      const remote = [];
+      snap.forEach(d => remote.push(d.data()));
+      remote.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+      if (remote.length) {
+        state.counselors = remote.map(c => ({
+          id: c.id,
+          name: c.name || '',
+          gender: c.gender || 'M',
+          vacationDates: Array.isArray(c.vacationDates) ? c.vacationDates.slice().sort() : [],
+        }));
+        saveState();
+        renderCounselors();
+        populateCounselorSelect();
+        renderVacationCalendar();
+        renderActivities();
+        if (document.querySelector('#tab-calendar.active')) renderSummerCalendar();
+      }
       cloudState.applyingRemote = false;
       setCloudIndicator('on', 'מסונכרן');
     }, err => {
-      console.error('cloud onSnapshot error', err);
+      console.error('cloud counselors onSnapshot error', err);
       setCloudIndicator('error', 'שגיאה');
     });
 
-    cloudState.active = true;
+    // Activities live listener
+    cloudState.unsubActivities = onSnapshot(activitiesCol, snap => {
+      cloudState.applyingRemote = true;
+      const remote = [];
+      snap.forEach(d => remote.push(d.data()));
+      remote.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+      state.activities = remote;
+      saveState();
+      renderActivities();
+      if (document.querySelector('#tab-calendar.active')) renderSummerCalendar();
+      cloudState.applyingRemote = false;
+      setCloudIndicator('on', 'מסונכרן');
+    }, err => {
+      console.error('cloud activities onSnapshot error', err);
+      setCloudIndicator('error', 'שגיאה');
+    });
+
     setCloudIndicator('on', 'מסונכרן');
   } catch (err) {
     console.error('initCloud error', err);
@@ -829,28 +889,114 @@ async function initCloud() {
   }
 }
 
-function pushToCloud(force = false) {
+// ---- Granular cloud writers ----
+function cloudWriteCounselor(c) {
   if (!cloudState.active || cloudState.applyingRemote) return;
-  clearTimeout(cloudState.writeTimeout);
-  cloudState.writeTimeout = setTimeout(async () => {
+  // Debounce per counselor to coalesce rapid name keystrokes
+  clearTimeout(cloudState.counselorWriteTimers[c.id]);
+  cloudState.counselorWriteTimers[c.id] = setTimeout(async () => {
     try {
       setCloudIndicator('syncing', 'שומר...');
-      await cloudState.setDoc(cloudState.doc, {
-        counselors: state.counselors,
-        activities: state.activities,
-        lastUpdate: state.lastUpdate || Date.now(),
+      const { doc, setDoc } = cloudState.fns;
+      await setDoc(doc(cloudState.db, 'camps', cloudState.groupCode, 'counselors', c.id), {
+        id: c.id, name: c.name, gender: c.gender,
+        vacationDates: c.vacationDates || [],
       });
       setCloudIndicator('on', 'מסונכרן');
-    } catch (err) {
-      console.error('pushToCloud error', err);
+    } catch (e) {
+      console.error('cloudWriteCounselor', e);
       setCloudIndicator('error', 'שגיאה');
     }
-  }, force ? 0 : 400);
+  }, 300);
+}
+
+async function cloudAddVacation(counselorId, date) {
+  if (!cloudState.active || cloudState.applyingRemote) return;
+  try {
+    setCloudIndicator('syncing', 'שומר...');
+    const { doc, updateDoc, arrayUnion } = cloudState.fns;
+    await updateDoc(doc(cloudState.db, 'camps', cloudState.groupCode, 'counselors', counselorId), {
+      vacationDates: arrayUnion(date),
+    });
+    setCloudIndicator('on', 'מסונכרן');
+  } catch (e) {
+    console.error('cloudAddVacation', e);
+    setCloudIndicator('error', 'שגיאה');
+  }
+}
+
+async function cloudRemoveVacation(counselorId, date) {
+  if (!cloudState.active || cloudState.applyingRemote) return;
+  try {
+    setCloudIndicator('syncing', 'שומר...');
+    const { doc, updateDoc, arrayRemove } = cloudState.fns;
+    await updateDoc(doc(cloudState.db, 'camps', cloudState.groupCode, 'counselors', counselorId), {
+      vacationDates: arrayRemove(date),
+    });
+    setCloudIndicator('on', 'מסונכרן');
+  } catch (e) {
+    console.error('cloudRemoveVacation', e);
+    setCloudIndicator('error', 'שגיאה');
+  }
+}
+
+async function cloudWriteActivity(a) {
+  if (!cloudState.active || cloudState.applyingRemote) return;
+  try {
+    setCloudIndicator('syncing', 'שומר...');
+    const { doc, setDoc } = cloudState.fns;
+    await setDoc(doc(cloudState.db, 'camps', cloudState.groupCode, 'activities', a.id), a);
+    setCloudIndicator('on', 'מסונכרן');
+  } catch (e) {
+    console.error('cloudWriteActivity', e);
+    setCloudIndicator('error', 'שגיאה');
+  }
+}
+
+async function cloudDeleteActivity(id) {
+  if (!cloudState.active || cloudState.applyingRemote) return;
+  try {
+    setCloudIndicator('syncing', 'שומר...');
+    const { doc, deleteDoc } = cloudState.fns;
+    await deleteDoc(doc(cloudState.db, 'camps', cloudState.groupCode, 'activities', id));
+    setCloudIndicator('on', 'מסונכרן');
+  } catch (e) {
+    console.error('cloudDeleteActivity', e);
+    setCloudIndicator('error', 'שגיאה');
+  }
+}
+
+async function cloudBulkReplace() {
+  if (!cloudState.active) return;
+  try {
+    setCloudIndicator('syncing', 'שומר...');
+    const { doc, setDoc, deleteDoc, collection, getDocs, writeBatch } = cloudState.fns;
+    const db = cloudState.db;
+    const group = cloudState.groupCode;
+    // Delete all existing activities, then write new
+    const existing = await getDocs(collection(db, 'camps', group, 'activities'));
+    const batch = writeBatch(db);
+    existing.forEach(d => batch.delete(d.ref));
+    state.activities.forEach(a => batch.set(doc(db, 'camps', group, 'activities', a.id), a));
+    state.counselors.forEach(c => batch.set(doc(db, 'camps', group, 'counselors', c.id), {
+      id: c.id, name: c.name, gender: c.gender, vacationDates: c.vacationDates || [],
+    }));
+    await batch.commit();
+    setCloudIndicator('on', 'מסונכרן');
+  } catch (e) {
+    console.error('cloudBulkReplace', e);
+    setCloudIndicator('error', 'שגיאה');
+  }
 }
 
 function disconnectCloud() {
-  if (cloudState.unsubscribe) cloudState.unsubscribe();
-  cloudState = { active: false, doc: null, unsubscribe: null, writeTimeout: null, applyingRemote: false, groupCode: null };
+  if (cloudState.unsubCounselors) cloudState.unsubCounselors();
+  if (cloudState.unsubActivities) cloudState.unsubActivities();
+  cloudState = {
+    active: false, db: null, groupCode: null,
+    unsubCounselors: null, unsubActivities: null,
+    applyingRemote: false, fns: null, counselorWriteTimers: {},
+  };
   localStorage.removeItem(CLOUD_CFG_KEY);
   localStorage.removeItem(CLOUD_GROUP_KEY);
   setCloudIndicator('off', 'סנכרון');

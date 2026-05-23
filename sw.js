@@ -1,4 +1,4 @@
-const CACHE = 'summer-camp-v2';
+const CACHE = 'summer-camp-v3';
 const ASSETS = [
   './',
   './index.html',
