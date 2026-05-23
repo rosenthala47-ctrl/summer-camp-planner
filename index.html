@@ -183,6 +183,29 @@
   </div>
 </div>
 
+<!-- Vacation Conflict Modal -->
+<div id="vacation-conflict-overlay" class="board-overlay hidden">
+  <div class="board-modal" style="max-width:560px">
+    <div class="board-toolbar">
+      <h3 style="margin:0;flex:1;font-size:18px">⚠️ קונפליקט עם פעילות מתוכננת</h3>
+    </div>
+    <div style="padding:24px">
+      <div id="vacation-conflict-body" style="margin-bottom:20px"></div>
+      <div class="form-row" style="display:flex;gap:10px;flex-wrap:wrap">
+        <button id="btn-conflict-move" class="primary" style="flex:1;min-width:200px">
+          📅 הזז פעילויות + שלח הודעה
+        </button>
+        <button id="btn-conflict-cancel" class="secondary" style="flex:1;min-width:150px">
+          ❌ ביטול השינוי
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notifications container -->
+<div id="toast-container"></div>
+
 <!-- Schedule Board Modal -->
 <div id="board-overlay" class="board-overlay hidden">
   <div class="board-modal">

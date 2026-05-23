@@ -227,15 +227,24 @@ function renderVacationCalendar() {
       if (!isInCamp(iso)) return;
       const isVac = counselor.vacationDates.includes(iso);
       if (isVac) {
+        // Removing a vacation date never creates new activity conflicts.
         counselor.vacationDates = counselor.vacationDates.filter(d => d !== iso);
         cloudRemoveVacation(counselor.id, iso);
+        saveState();
+        renderVacationCalendar();
       } else {
-        counselor.vacationDates.push(iso);
-        counselor.vacationDates.sort();
-        cloudAddVacation(counselor.id, iso);
+        // Adding a vacation date may collide with existing activities.
+        const conflicts = checkVacationToggleConflicts(counselor.id, iso);
+        if (conflicts.length === 0) {
+          counselor.vacationDates.push(iso);
+          counselor.vacationDates.sort();
+          cloudAddVacation(counselor.id, iso);
+          saveState();
+          renderVacationCalendar();
+        } else {
+          showVacationConflictModal(counselor, iso, conflicts);
+        }
       }
-      saveState();
-      renderVacationCalendar();
     }, iso => {
       if (counselor.vacationDates.includes(iso)) return { className: 'unavailable' };
       return null;
@@ -761,6 +770,150 @@ function buildBoardMonthTable(year, month, dayInfo, actColorMap) {
   return table;
 }
 
+// ---------------- Vacation-vs-Activity conflict resolution ----------------
+// When a counselor marks themselves unavailable on a date that already has
+// a planned activity that requires them, we propose moving the activity.
+
+function checkVacationToggleConflicts(counselorId, newDate) {
+  // Returns array of { activity, proposedDate } for activities that would
+  // conflict if `newDate` were added to `counselorId`'s vacationDates.
+  // `proposedDate` is null when no free range was found.
+
+  // Simulate the new vacation date in state, find affected activities and
+  // their proposed new start dates, then restore state.
+  const counselor = state.counselors.find(c => c.id === counselorId);
+  if (!counselor) return [];
+  const original = counselor.vacationDates.slice();
+  counselor.vacationDates = [...original, newDate].sort();
+
+  const issues = [];
+  for (const a of state.activities) {
+    const range = rangeISO(a.startDate, a.days);
+    if (!range.includes(newDate)) continue;
+    const required = requiredCounselorsForType(a.type);
+    if (!required.has(counselorId)) continue;
+    // This activity now conflicts. Try to find a new free range.
+    const proposedDate = findFreeRange(a.days, a.type);
+    issues.push({ activity: a, proposedDate });
+  }
+
+  counselor.vacationDates = original;
+  return issues;
+}
+
+function showVacationConflictModal(counselor, newDate, conflicts) {
+  const overlay = document.getElementById('vacation-conflict-overlay');
+  const body = document.getElementById('vacation-conflict-body');
+  const dateHeb = formatHebrewDate(newDate);
+
+  let html = `
+    <p style="margin-bottom:14px;line-height:1.6">
+      סימנת ש-<b>${escapeHTML(counselor.name)}</b> לא יכול ב-<b>${dateHeb}</b>,
+      אבל בתאריך הזה כבר מתוכננת ${conflicts.length === 1 ? 'פעילות' : conflicts.length + ' פעילויות'}
+      שדורש${conflicts.length === 1 ? 'ת' : 'ות'} את ${counselor.gender === 'M' ? 'נוכחותו' : 'נוכחותה'}:
+    </p>
+  `;
+  conflicts.forEach(({ activity, proposedDate }) => {
+    const endOld = addDays(activity.startDate, activity.days - 1);
+    html += `<div class="conflict-activity-card">
+      <div style="font-weight:700;margin-bottom:6px">🎯 ${escapeHTML(activity.name)}</div>
+      <div class="conflict-old">📅 תאריך נוכחי: ${formatHebrewDate(activity.startDate)}${activity.days > 1 ? ' – ' + formatHebrewDate(endOld) : ''}</div>`;
+    if (proposedDate) {
+      const endNew = addDays(proposedDate, activity.days - 1);
+      html += `<div class="conflict-new">✅ הצעה: ${formatHebrewDate(proposedDate)}${activity.days > 1 ? ' – ' + formatHebrewDate(endNew) : ''}</div>`;
+    } else {
+      html += `<div class="conflict-no-fit">⚠️ לא נמצא תאריך חלופי פנוי — תצטרכ${counselor.gender === 'M' ? '' : 'י'} לשנות ידנית</div>`;
+    }
+    html += `</div>`;
+  });
+  body.innerHTML = html;
+
+  // Wire buttons (clone to drop previous listeners)
+  const moveBtn = document.getElementById('btn-conflict-move');
+  const cancelBtn = document.getElementById('btn-conflict-cancel');
+  const newMove = moveBtn.cloneNode(true);
+  const newCancel = cancelBtn.cloneNode(true);
+  moveBtn.parentNode.replaceChild(newMove, moveBtn);
+  cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+
+  const allHaveProposal = conflicts.every(c => c.proposedDate);
+  if (!allHaveProposal) {
+    newMove.disabled = true;
+    newMove.style.opacity = '0.5';
+    newMove.style.cursor = 'not-allowed';
+    newMove.title = 'אין תאריך חלופי פנוי לכל הפעילויות';
+  }
+
+  newMove.addEventListener('click', () => {
+    if (!allHaveProposal) return;
+    applyVacationWithMoves(counselor, newDate, conflicts);
+    closeVacationConflictModal();
+  });
+  newCancel.addEventListener('click', closeVacationConflictModal);
+
+  overlay.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeVacationConflictModal() {
+  document.getElementById('vacation-conflict-overlay').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function applyVacationWithMoves(counselor, newDate, conflicts) {
+  // Add the vacation date
+  counselor.vacationDates.push(newDate);
+  counselor.vacationDates.sort();
+  cloudAddVacation(counselor.id, newDate);
+
+  // Move each conflicting activity and append a note explaining why
+  const moves = [];
+  conflicts.forEach(({ activity, proposedDate }) => {
+    if (!proposedDate) return;
+    const oldDate = activity.startDate;
+    activity.startDate = proposedDate;
+    const noteLine = `📢 הוזז מ-${formatHebrewDate(oldDate)} ל-${formatHebrewDate(proposedDate)} כי ${counselor.name} לא יכול ב-${formatHebrewDate(newDate)}`;
+    activity.notes = activity.notes ? activity.notes + ' | ' + noteLine : noteLine;
+    cloudWriteActivity(activity);
+    moves.push({ name: activity.name, from: oldDate, to: proposedDate });
+  });
+  state.activities.sort((a, b) => a.startDate.localeCompare(b.startDate));
+  saveState();
+
+  // Build a notification message for all counselors
+  const movesText = moves
+    .map(m => `• "${m.name}" עבר מ-${formatHebrewDate(m.from)} ל-${formatHebrewDate(m.to)}`)
+    .join('\n');
+  const message = `📅 לוח הפעילויות עודכן\n${counselor.name} לא יכול ב-${formatHebrewDate(newDate)}:\n${movesText}`;
+  cloudPushNotification(message);
+  showToast(message);
+
+  renderVacationCalendar();
+  renderActivities();
+  if (document.querySelector('#tab-calendar.active')) renderSummerCalendar();
+}
+
+// Close modal on backdrop click
+document.getElementById('vacation-conflict-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeVacationConflictModal();
+});
+
+// ---------------- Toast notifications ----------------
+function showToast(message, durationMs = 7000) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  container.appendChild(toast);
+  // trigger transition
+  requestAnimationFrame(() => toast.classList.add('show'));
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, durationMs);
+}
+
 // ---------------- Cloud Sync (Firebase Firestore) ----------------
 const CLOUD_CFG_KEY = 'summerCampPlanner_cloudConfig_v1';
 const CLOUD_GROUP_KEY = 'summerCampPlanner_groupCode_v1';
@@ -784,9 +937,12 @@ let cloudState = {
   groupCode: null,
   unsubCounselors: null,
   unsubActivities: null,
+  unsubNotifications: null,
   applyingRemote: false,
   fns: null,
   counselorWriteTimers: {},
+  pageLoadedAt: Date.now(),
+  clientId: 'cl_' + Math.random().toString(36).slice(2, 10),
 };
 
 function setCloudIndicator(status, label) {
@@ -819,6 +975,7 @@ async function initCloud() {
 
     const counselorsCol = collection(db, 'camps', groupCode, 'counselors');
     const activitiesCol = collection(db, 'camps', groupCode, 'activities');
+    const notificationsCol = collection(db, 'camps', groupCode, 'notifications');
 
     // Seed counselors if empty (first-ever connection for this group)
     const seedSnap = await getDocs(counselorsCol);
@@ -863,6 +1020,22 @@ async function initCloud() {
     }, err => {
       console.error('cloud counselors onSnapshot error', err);
       setCloudIndicator('error', 'שגיאה');
+    });
+
+    // Notifications live listener — toast any added since this client loaded.
+    cloudState.unsubNotifications = onSnapshot(notificationsCol, snap => {
+      snap.docChanges().forEach(change => {
+        if (change.type !== 'added') return;
+        const data = change.doc.data();
+        if (!data || !data.message) return;
+        // Skip notifications older than this page load (i.e., initial snapshot
+        // backlog). Author also skips their own (showToast already fired locally).
+        if (data.timestamp < cloudState.pageLoadedAt) return;
+        if (data.authorClientId === cloudState.clientId) return;
+        showToast(data.message);
+      });
+    }, err => {
+      console.error('cloud notifications onSnapshot error', err);
     });
 
     // Activities live listener
@@ -966,6 +1139,22 @@ async function cloudDeleteActivity(id) {
   }
 }
 
+async function cloudPushNotification(message) {
+  if (!cloudState.active) return;
+  try {
+    const { doc, setDoc } = cloudState.fns;
+    const id = 'n_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    await setDoc(doc(cloudState.db, 'camps', cloudState.groupCode, 'notifications', id), {
+      id,
+      message,
+      timestamp: Date.now(),
+      authorClientId: cloudState.clientId,
+    });
+  } catch (e) {
+    console.error('cloudPushNotification', e);
+  }
+}
+
 async function cloudBulkReplace() {
   if (!cloudState.active) return;
   try {
@@ -992,10 +1181,13 @@ async function cloudBulkReplace() {
 function disconnectCloud() {
   if (cloudState.unsubCounselors) cloudState.unsubCounselors();
   if (cloudState.unsubActivities) cloudState.unsubActivities();
+  if (cloudState.unsubNotifications) cloudState.unsubNotifications();
   cloudState = {
     active: false, db: null, groupCode: null,
-    unsubCounselors: null, unsubActivities: null,
+    unsubCounselors: null, unsubActivities: null, unsubNotifications: null,
     applyingRemote: false, fns: null, counselorWriteTimers: {},
+    pageLoadedAt: Date.now(),
+    clientId: cloudState.clientId,
   };
   localStorage.removeItem(CLOUD_CFG_KEY);
   localStorage.removeItem(CLOUD_GROUP_KEY);

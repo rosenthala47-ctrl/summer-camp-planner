@@ -871,6 +871,67 @@ footer {
 }
 
 /* ============================================================
+   Toast notifications
+   ============================================================ */
+#toast-container {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  width: min(90vw, 480px);
+}
+.toast {
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: white;
+  padding: 14px 20px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: auto;
+  white-space: pre-wrap;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ============================================================
+   Vacation conflict modal extras
+   ============================================================ */
+.conflict-activity-card {
+  background: #fef3c7;
+  border-right: 4px solid #f59e0b;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.conflict-activity-card .conflict-old {
+  color: #991b1b;
+  font-size: 13px;
+  text-decoration: line-through;
+}
+.conflict-activity-card .conflict-new {
+  color: #15803d;
+  font-weight: 700;
+  font-size: 14px;
+}
+.conflict-activity-card .conflict-no-fit {
+  color: #991b1b;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* ============================================================
    Print styles
    ============================================================ */
 @media print {
