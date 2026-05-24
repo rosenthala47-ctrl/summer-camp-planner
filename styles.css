@@ -250,7 +250,7 @@ button.danger {
 /* Counselors */
 .counselor-row {
   display: grid;
-  grid-template-columns: 80px 1fr 200px;
+  grid-template-columns: 80px 1fr 140px minmax(170px, 0.8fr);
   gap: 12px;
   align-items: center;
   margin-bottom: 10px;
@@ -259,6 +259,33 @@ button.danger {
   border: 1px solid var(--border);
   border-radius: 8px;
 }
+
+.counselor-pw {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.pw-status {
+  font-size: 13px;
+  font-weight: 600;
+}
+.pw-status.locked { color: var(--success); }
+.pw-status.unlocked { color: var(--warning); }
+
+.pw-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--primary);
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+.pw-btn:hover { background: #eff6ff; }
 
 .counselor-row .badge {
   font-size: 13px;
@@ -298,6 +325,70 @@ button.danger {
 .counselor-selector select {
   min-width: 200px;
 }
+
+/* Vacation auth: login + welcome */
+#vacation-auth { margin-bottom: 16px; }
+
+.vacation-login {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+.login-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.login-hint {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 4px 0 12px;
+}
+.login-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.login-row input[type="password"] {
+  flex: 1;
+  min-width: 160px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+}
+.login-error {
+  margin-top: 10px;
+  color: var(--danger);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.vacation-welcome {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: linear-gradient(135deg, #ecfdf5, #eff6ff);
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  box-shadow: var(--shadow);
+}
+.welcome-text {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 700;
+  color: #15803d;
+  min-width: 200px;
+}
+
+/* Locked (read-only) days in the vacation calendar */
+.day.unavailable.locked { cursor: default; opacity: 0.85; }
 
 /* Calendar grid */
 .month {
@@ -603,7 +694,7 @@ footer {
     grid-template-columns: 60px 1fr;
   }
   .counselor-row .badge {
-    grid-row: span 2;
+    grid-row: span 3;
   }
   header h1 { font-size: 22px; }
   .tab { font-size: 13px; padding: 12px 4px; min-width: 100px; }

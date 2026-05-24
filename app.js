@@ -6,6 +6,12 @@ const CAMP_START = '2026-06-18';
 const CAMP_END = '2026-08-26';
 const STORAGE_KEY = 'summerCampPlanner_v1';
 
+// One-time reset of every counselor's unavailability dates. Bump this token to
+// trigger the reset again. It runs once per device (localStorage) and once for
+// the whole shared group (Firestore meta doc), gated by the same token.
+const RESET_TOKEN = 'vacations-reset-2026-05';
+const LOCAL_RESET_KEY = 'summerCampPlanner_resetToken_v1';
+
 const HEBREW_MONTHS = {
   6: 'יוני 2026',
   7: 'יולי 2026',
@@ -16,10 +22,10 @@ const HEBREW_DAYS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
 
 const DEFAULT_STATE = {
   counselors: [
-    { id: 'c1', name: 'מדריך 1', gender: 'M', vacationDates: [] },
-    { id: 'c2', name: 'מדריך 2', gender: 'M', vacationDates: [] },
-    { id: 'c3', name: 'מדריכה 1', gender: 'F', vacationDates: [] },
-    { id: 'c4', name: 'מדריכה 2', gender: 'F', vacationDates: [] },
+    { id: 'c1', name: 'מדריך 1', gender: 'M', vacationDates: [], passwordHash: '' },
+    { id: 'c2', name: 'מדריך 2', gender: 'M', vacationDates: [], passwordHash: '' },
+    { id: 'c3', name: 'מדריכה 1', gender: 'F', vacationDates: [], passwordHash: '' },
+    { id: 'c4', name: 'מדריכה 2', gender: 'F', vacationDates: [], passwordHash: '' },
   ],
   activities: [],
 };
@@ -33,7 +39,11 @@ function loadState() {
     if (!raw) return structuredClone(DEFAULT_STATE);
     const parsed = JSON.parse(raw);
     // Backfill missing fields
-    parsed.counselors = parsed.counselors || DEFAULT_STATE.counselors;
+    parsed.counselors = (parsed.counselors || DEFAULT_STATE.counselors).map(c => ({
+      passwordHash: '',
+      ...c,
+      vacationDates: Array.isArray(c.vacationDates) ? c.vacationDates : [],
+    }));
     parsed.activities = parsed.activities || [];
     return parsed;
   } catch (e) {
@@ -47,6 +57,70 @@ function saveState() {
   // and is triggered explicitly by each mutation path.
   state.lastUpdate = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+// Clears every counselor's unavailability dates once per device. The shared
+// cloud copy is reset separately inside initCloud(), gated by the same token.
+function applyLocalVacationReset() {
+  if (localStorage.getItem(LOCAL_RESET_KEY) === RESET_TOKEN) return;
+  let changed = false;
+  state.counselors.forEach(c => {
+    if (Array.isArray(c.vacationDates) && c.vacationDates.length) changed = true;
+    c.vacationDates = [];
+  });
+  localStorage.setItem(LOCAL_RESET_KEY, RESET_TOKEN);
+  if (changed) saveState();
+}
+
+// ---------------- Per-counselor password / auth ----------------
+// The counselor whose dates are currently unlocked for editing. Kept in memory
+// only — a page reload requires logging in again.
+let currentCoachId = null;
+
+async function hashPassword(pw) {
+  const data = new TextEncoder().encode(String(pw));
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function coachHasPassword(c) {
+  return !!(c && c.passwordHash);
+}
+
+async function verifyCoachPassword(coachId, plainPw) {
+  const c = state.counselors.find(x => x.id === coachId);
+  if (!c || !c.passwordHash) return false;
+  return (await hashPassword(plainPw)) === c.passwordHash;
+}
+
+async function promptSetPassword(coachId, isChange) {
+  const c = state.counselors.find(x => x.id === coachId);
+  if (!c) return;
+  if (isChange) {
+    const current = prompt(`הזן/י את הסיסמה הנוכחית של ${c.name}:`);
+    if (current === null) return;
+    if (!(await verifyCoachPassword(coachId, current))) {
+      alert('❌ סיסמה נוכחית שגויה.');
+      return;
+    }
+  }
+  const pw = prompt(`בחר/י סיסמה חדשה ל${c.name} (משהו פשוט וקל לזכור):`);
+  if (pw === null) return;
+  if (pw.trim().length < 3) {
+    alert('הסיסמה צריכה להיות לפחות 3 תווים.');
+    return;
+  }
+  const confirmPw = prompt('הקלד/י שוב את הסיסמה לאישור:');
+  if (confirmPw === null) return;
+  if (pw !== confirmPw) {
+    alert('הסיסמאות לא תואמות. נסה/י שוב.');
+    return;
+  }
+  c.passwordHash = await hashPassword(pw);
+  saveState();
+  cloudWriteCounselor(c);
+  renderCounselors();
+  alert(`✅ הסיסמה של ${c.name} נשמרה.`);
 }
 
 // ---------------- Date helpers ----------------
@@ -166,6 +240,7 @@ function renderCounselors() {
   state.counselors.forEach((c, idx) => {
     const row = document.createElement('div');
     row.className = `counselor-row ${c.gender === 'M' ? 'male' : 'female'}`;
+    const hasPw = coachHasPassword(c);
     row.innerHTML = `
       <div class="badge">${c.gender === 'M' ? '👦 מדריך' : '👧 מדריכה'}</div>
       <label>שם:
@@ -177,6 +252,13 @@ function renderCounselors() {
           <option value="F" ${c.gender === 'F' ? 'selected' : ''}>נקבה</option>
         </select>
       </label>
+      <div class="counselor-pw">
+        ${hasPw
+          ? `<span class="pw-status locked">🔒 מוגן בסיסמה</span>
+             <button type="button" class="pw-btn pw-change" data-id="${c.id}">שנה סיסמה</button>`
+          : `<span class="pw-status unlocked">🔓 ללא סיסמה</span>
+             <button type="button" class="pw-btn pw-set" data-id="${c.id}">🔑 הגדר סיסמה</button>`}
+      </div>
     `;
     list.appendChild(row);
   });
@@ -192,6 +274,11 @@ function renderCounselors() {
       populateCounselorSelect();
     });
   });
+
+  list.querySelectorAll('.pw-set').forEach(btn =>
+    btn.addEventListener('click', () => promptSetPassword(btn.dataset.id, false)));
+  list.querySelectorAll('.pw-change').forEach(btn =>
+    btn.addEventListener('click', () => promptSetPassword(btn.dataset.id, true)));
 }
 
 function escapeHTML(s) {
@@ -210,45 +297,120 @@ function populateCounselorSelect() {
   if (prev && state.counselors.find(c => c.id === prev)) sel.value = prev;
 }
 
-document.getElementById('vacation-counselor-select').addEventListener('change', renderVacationCalendar);
+// Switching the selected counselor re-locks: you must re-enter the password.
+document.getElementById('vacation-counselor-select').addEventListener('change', () => {
+  currentCoachId = null;
+  renderVacationCalendar();
+});
 
 function renderVacationCalendar() {
+  const authBox = document.getElementById('vacation-auth');
   const container = document.getElementById('vacation-calendar');
   const selectedId = document.getElementById('vacation-counselor-select').value;
   const counselor = state.counselors.find(c => c.id === selectedId);
+  if (authBox) authBox.innerHTML = '';
+  container.innerHTML = '';
+
   if (!counselor) {
     container.innerHTML = '<div class="empty-state">בחר מדריך</div>';
     return;
   }
-  container.innerHTML = '';
+
+  // No password yet → editing is blocked until one is set in the Counselors tab.
+  if (!coachHasPassword(counselor)) {
+    if (authBox) authBox.innerHTML = `<div class="warning-box info">
+      🔑 ל${escapeHTML(counselor.name)} עדיין אין סיסמה. כדי להגן על הימים, עברו ללשונית
+      <b>👥 מדריכים</b> ולחצו "הגדר סיסמה". עד אז אי אפשר לערוך כאן.
+    </div>`;
+    renderVacationMonths(container, counselor, false);
+    return;
+  }
+
+  // Has a password but this session isn't authenticated for them → locked.
+  if (currentCoachId !== counselor.id) {
+    if (authBox) authBox.innerHTML = `<div class="vacation-login">
+      <div class="login-title">🔒 הימים של ${escapeHTML(counselor.name)} נעולים</div>
+      <p class="login-hint">${counselor.gender === 'M' ? 'הזן את הסיסמה שלך' : 'הזיני את הסיסמה שלך'} כדי לערוך.</p>
+      <div class="login-row">
+        <input type="password" id="vacation-pw-input" placeholder="סיסמה" autocomplete="off">
+        <button type="button" id="vacation-login-btn" class="primary">🔓 כניסה</button>
+      </div>
+      <div id="vacation-login-error" class="login-error" hidden></div>
+    </div>`;
+    renderVacationMonths(container, counselor, false);
+    wireVacationLogin(counselor);
+    return;
+  }
+
+  // Authenticated → welcome banner + editable calendar.
+  const greet = counselor.gender === 'M' ? 'ברוך הבא' : 'ברוכה הבאה';
+  const ask = counselor.gender === 'M' ? 'אילו שינויים תרצה לעשות היום?' : 'אילו שינויים תרצי לעשות היום?';
+  if (authBox) {
+    authBox.innerHTML = `<div class="vacation-welcome">
+      <div class="welcome-text">😊 ${greet} ${escapeHTML(counselor.name)}! ${ask}</div>
+      <button type="button" id="vacation-logout-btn" class="secondary">🔒 נעילה</button>
+    </div>`;
+    document.getElementById('vacation-logout-btn').addEventListener('click', () => {
+      currentCoachId = null;
+      renderVacationCalendar();
+    });
+  }
+  renderVacationMonths(container, counselor, true);
+}
+
+function wireVacationLogin(counselor) {
+  const input = document.getElementById('vacation-pw-input');
+  const btn = document.getElementById('vacation-login-btn');
+  const errEl = document.getElementById('vacation-login-error');
+  if (!input || !btn) return;
+  const submit = async () => {
+    if (await verifyCoachPassword(counselor.id, input.value)) {
+      currentCoachId = counselor.id;
+      renderVacationCalendar();
+    } else {
+      errEl.hidden = false;
+      errEl.textContent = '❌ סיסמה שגויה, נסו שוב.';
+      input.value = '';
+      input.focus();
+    }
+  };
+  btn.addEventListener('click', submit);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+  input.focus();
+}
+
+function renderVacationMonths(container, counselor, editable) {
   const months = monthsBetween(CAMP_START, CAMP_END);
-  months.forEach(({ year, month }) => {
-    container.appendChild(buildMonth(year, month, (iso, dayEl) => {
-      if (!isInCamp(iso)) return;
-      const isVac = counselor.vacationDates.includes(iso);
-      if (isVac) {
-        // Removing a vacation date never creates new activity conflicts.
-        counselor.vacationDates = counselor.vacationDates.filter(d => d !== iso);
-        cloudRemoveVacation(counselor.id, iso);
+  const onClick = editable ? (iso => {
+    if (!isInCamp(iso)) return;
+    const c = state.counselors.find(x => x.id === counselor.id);
+    if (!c) return;
+    const isVac = c.vacationDates.includes(iso);
+    if (isVac) {
+      // Removing a vacation date never creates new activity conflicts.
+      c.vacationDates = c.vacationDates.filter(d => d !== iso);
+      cloudRemoveVacation(c.id, iso);
+      saveState();
+      renderVacationCalendar();
+    } else {
+      // Adding a vacation date may collide with existing activities.
+      const conflicts = checkVacationToggleConflicts(c.id, iso);
+      if (conflicts.length === 0) {
+        c.vacationDates.push(iso);
+        c.vacationDates.sort();
+        cloudAddVacation(c.id, iso);
         saveState();
         renderVacationCalendar();
       } else {
-        // Adding a vacation date may collide with existing activities.
-        const conflicts = checkVacationToggleConflicts(counselor.id, iso);
-        if (conflicts.length === 0) {
-          counselor.vacationDates.push(iso);
-          counselor.vacationDates.sort();
-          cloudAddVacation(counselor.id, iso);
-          saveState();
-          renderVacationCalendar();
-        } else {
-          showVacationConflictModal(counselor, iso, conflicts);
-        }
+        showVacationConflictModal(c, iso, conflicts);
       }
-    }, iso => {
-      if (counselor.vacationDates.includes(iso)) return { className: 'unavailable' };
-      return null;
-    }));
+    }
+  }) : null;
+  const decorate = iso => counselor.vacationDates.includes(iso)
+    ? { className: editable ? 'unavailable' : 'unavailable locked' }
+    : null;
+  months.forEach(({ year, month }) => {
+    container.appendChild(buildMonth(year, month, onClick, decorate));
   });
 }
 
@@ -579,6 +741,7 @@ function initRender() {
   renderActivities();
 }
 
+applyLocalVacationReset();
 initRender();
 
 // ---------------- Schedule Board ----------------
@@ -962,7 +1125,7 @@ async function initCloud() {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
     const firestoreMod = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js');
     const {
-      getFirestore, doc, setDoc, deleteDoc, updateDoc,
+      getFirestore, doc, getDoc, setDoc, deleteDoc, updateDoc,
       arrayUnion, arrayRemove, collection, onSnapshot, getDocs, writeBatch,
     } = firestoreMod;
 
@@ -986,6 +1149,7 @@ async function initCloud() {
         batch.set(doc(db, 'camps', groupCode, 'counselors', c.id), {
           id: c.id, name: c.name, gender: c.gender,
           vacationDates: c.vacationDates || [],
+          passwordHash: c.passwordHash || '',
         });
       });
       // Also seed any local activities
@@ -993,6 +1157,23 @@ async function initCloud() {
         batch.set(doc(db, 'camps', groupCode, 'activities', a.id), a);
       });
       await batch.commit();
+    }
+
+    // One-time shared reset: wipe every counselor's vacationDates once for the
+    // whole group. Gated by a token in a meta doc so it runs exactly once.
+    try {
+      const metaRef = doc(db, 'camps', groupCode, 'meta', 'state');
+      const metaSnap = await getDoc(metaRef);
+      const applied = metaSnap.exists() ? metaSnap.data().vacationResetToken : null;
+      if (applied !== RESET_TOKEN) {
+        const curSnap = await getDocs(counselorsCol);
+        const batch = writeBatch(db);
+        curSnap.forEach(d => batch.update(d.ref, { vacationDates: [] }));
+        batch.set(metaRef, { vacationResetToken: RESET_TOKEN, resetAt: Date.now() }, { merge: true });
+        await batch.commit();
+      }
+    } catch (e) {
+      console.error('cloud vacation reset failed', e);
     }
 
     // Counselors live listener
@@ -1007,6 +1188,7 @@ async function initCloud() {
           name: c.name || '',
           gender: c.gender || 'M',
           vacationDates: Array.isArray(c.vacationDates) ? c.vacationDates.slice().sort() : [],
+          passwordHash: c.passwordHash || '',
         }));
         saveState();
         renderCounselors();
@@ -1074,6 +1256,7 @@ function cloudWriteCounselor(c) {
       await setDoc(doc(cloudState.db, 'camps', cloudState.groupCode, 'counselors', c.id), {
         id: c.id, name: c.name, gender: c.gender,
         vacationDates: c.vacationDates || [],
+        passwordHash: c.passwordHash || '',
       });
       setCloudIndicator('on', 'מסונכרן');
     } catch (e) {
@@ -1169,6 +1352,7 @@ async function cloudBulkReplace() {
     state.activities.forEach(a => batch.set(doc(db, 'camps', group, 'activities', a.id), a));
     state.counselors.forEach(c => batch.set(doc(db, 'camps', group, 'counselors', c.id), {
       id: c.id, name: c.name, gender: c.gender, vacationDates: c.vacationDates || [],
+      passwordHash: c.passwordHash || '',
     }));
     await batch.commit();
     setCloudIndicator('on', 'מסונכרן');
