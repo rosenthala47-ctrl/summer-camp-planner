@@ -993,10 +993,13 @@ function showVacationConflictModal(counselor, newDate, conflicts) {
 
   // Wire buttons (clone to drop previous listeners)
   const moveBtn = document.getElementById('btn-conflict-move');
+  const anywayBtn = document.getElementById('btn-conflict-anyway');
   const cancelBtn = document.getElementById('btn-conflict-cancel');
   const newMove = moveBtn.cloneNode(true);
+  const newAnyway = anywayBtn.cloneNode(true);
   const newCancel = cancelBtn.cloneNode(true);
   moveBtn.parentNode.replaceChild(newMove, moveBtn);
+  anywayBtn.parentNode.replaceChild(newAnyway, anywayBtn);
   cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
 
   const allHaveProposal = conflicts.every(c => c.proposedDate);
@@ -1010,6 +1013,13 @@ function showVacationConflictModal(counselor, newDate, conflicts) {
   newMove.addEventListener('click', () => {
     if (!allHaveProposal) return;
     applyVacationWithMoves(counselor, newDate, conflicts);
+    closeVacationConflictModal();
+  });
+  newAnyway.addEventListener('click', () => {
+    const actNames = conflicts.map(c => `"${c.activity.name}"`).join(', ');
+    const msg = `האם אתה בטוח שתרצה בכל זאת לקבוע חופשה ב-${formatHebrewDate(newDate)}?\n\nהפעילות ${actNames} תישאר בתאריך המקורי וזה יסומן כקונפליקט בלוח.`;
+    if (!confirm(msg)) return;
+    applyVacationAnyway(counselor, newDate, conflicts);
     closeVacationConflictModal();
   });
   newCancel.addEventListener('click', closeVacationConflictModal);
@@ -1048,6 +1058,26 @@ function applyVacationWithMoves(counselor, newDate, conflicts) {
     .map(m => `• "${m.name}" עבר מ-${formatHebrewDate(m.from)} ל-${formatHebrewDate(m.to)}`)
     .join('\n');
   const message = `📅 לוח הפעילויות עודכן\n${counselor.name} לא יכול ב-${formatHebrewDate(newDate)}:\n${movesText}`;
+  cloudPushNotification(message);
+  showToast(message);
+
+  renderVacationCalendar();
+  renderActivities();
+  if (document.querySelector('#tab-calendar.active')) renderSummerCalendar();
+}
+
+function applyVacationAnyway(counselor, newDate, conflicts) {
+  // Add the vacation date without moving any activities. The existing
+  // conflict will then show on the activity list and calendar.
+  counselor.vacationDates.push(newDate);
+  counselor.vacationDates.sort();
+  cloudAddVacation(counselor.id, newDate);
+  saveState();
+
+  // Broadcast a notification so the other counselors know a conflict was
+  // accepted (rather than silently appearing as a red flag on their board).
+  const actNames = conflicts.map(c => `"${c.activity.name}"`).join(', ');
+  const message = `⚠️ קונפליקט חדש בלוח\n${counselor.name} סימן חופשה ב-${formatHebrewDate(newDate)} למרות ש-${actNames} מתוכננ${conflicts.length === 1 ? 'ת' : 'ות'} באותו תאריך.`;
   cloudPushNotification(message);
   showToast(message);
 
