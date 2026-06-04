@@ -77,6 +77,15 @@ function applyLocalVacationReset() {
 // only — a page reload requires logging in again.
 let currentCoachId = null;
 
+// The self-claimed coach identity for THIS device, persisted in localStorage.
+// Gates the "reset password" button so each coach can only reset their own.
+const MY_COACH_KEY = 'summerCampPlanner_myCoachId_v1';
+function getMyCoachId() { return localStorage.getItem(MY_COACH_KEY) || ''; }
+function setMyCoachId(id) {
+  if (id) localStorage.setItem(MY_COACH_KEY, id);
+  else localStorage.removeItem(MY_COACH_KEY);
+}
+
 async function hashPassword(pw) {
   const data = new TextEncoder().encode(String(pw));
   const buf = await crypto.subtle.digest('SHA-256', data);
@@ -237,12 +246,30 @@ document.querySelectorAll('.tab').forEach(btn => {
 function renderCounselors() {
   const list = document.getElementById('counselors-list');
   list.innerHTML = '';
+
+  // Self-identity selector: which row "belongs to" this device. Only this
+  // coach's "reset password" button is shown — others can't reset for you.
+  const myId = getMyCoachId();
+  const idBar = document.createElement('div');
+  idBar.className = 'my-coach-row';
+  idBar.innerHTML = `
+    <label>אני:
+      <select id="my-coach-select">
+        <option value="" ${!myId ? 'selected' : ''}>— בחר/י את שמך —</option>
+        ${state.counselors.map(c => `<option value="${c.id}" ${c.id === myId ? 'selected' : ''}>${escapeHTML(c.name)}</option>`).join('')}
+      </select>
+    </label>
+    <span class="my-coach-hint">הבחירה נשמרת במכשיר הזה ומחליטה ליד מי יוצג כפתור "🔄 איפוס סיסמה".</span>
+  `;
+  list.appendChild(idBar);
+
   state.counselors.forEach((c, idx) => {
     const row = document.createElement('div');
     row.className = `counselor-row ${c.gender === 'M' ? 'male' : 'female'}`;
     const hasPw = coachHasPassword(c);
+    const isMe = myId === c.id;
     row.innerHTML = `
-      <div class="badge">${c.gender === 'M' ? '👦 מדריך' : '👧 מדריכה'}</div>
+      <div class="badge">${c.gender === 'M' ? '👦 מדריך' : '👧 מדריכה'}${isMe ? ' ⭐' : ''}</div>
       <label>שם:
         <input type="text" data-idx="${idx}" data-field="name" value="${escapeHTML(c.name)}">
       </label>
@@ -257,7 +284,7 @@ function renderCounselors() {
           ? `<span class="pw-status locked">🔒 מוגן בסיסמה</span>
              <div class="pw-actions">
                <button type="button" class="pw-btn pw-change" data-id="${c.id}">שנה</button>
-               <button type="button" class="pw-btn pw-reset" data-id="${c.id}">🔄 איפוס</button>
+               ${isMe ? `<button type="button" class="pw-btn pw-reset" data-id="${c.id}">🔄 איפוס</button>` : ''}
              </div>`
           : `<span class="pw-status unlocked">🔓 ללא סיסמה</span>
              <button type="button" class="pw-btn pw-set" data-id="${c.id}">🔑 הגדר סיסמה</button>`}
@@ -266,7 +293,12 @@ function renderCounselors() {
     list.appendChild(row);
   });
 
-  list.querySelectorAll('input, select').forEach(el => {
+  document.getElementById('my-coach-select').addEventListener('change', e => {
+    setMyCoachId(e.target.value);
+    renderCounselors();
+  });
+
+  list.querySelectorAll('input[data-field], select[data-field]').forEach(el => {
     el.addEventListener('change', e => {
       const idx = +e.target.dataset.idx;
       const field = e.target.dataset.field;
@@ -287,11 +319,14 @@ function renderCounselors() {
 }
 
 function promptResetPassword(coachId) {
+  // Defensive: only the device's self-claimed identity may reset its password.
+  if (coachId !== getMyCoachId()) {
+    alert('אפשר לאפס רק את הסיסמה של עצמך. בחר/י את שמך ב"אני:" בראש הלשונית.');
+    return;
+  }
   const c = state.counselors.find(x => x.id === coachId);
   if (!c) return;
-  const willNeed = c.gender === 'M' ? 'הוא יצטרך' : 'היא תצטרך';
-  const toCome = c.gender === 'M' ? 'שיבוא' : 'שתבוא';
-  if (!confirm(`לאפס את הסיסמה של ${c.name}?\n${willNeed} להגדיר סיסמה חדשה לפני ${toCome} לערוך ימים.`)) return;
+  if (!confirm(`לאפס את הסיסמה שלך (${c.name})?\nאחר כך תצטרך/י להגדיר סיסמה חדשה לפני שתוכל/י לערוך ימים.`)) return;
   c.passwordHash = '';
   if (currentCoachId === coachId) currentCoachId = null;
   saveState();
@@ -386,6 +421,9 @@ function wireVacationLogin(counselor) {
   const submit = async () => {
     if (await verifyCoachPassword(counselor.id, input.value)) {
       currentCoachId = counselor.id;
+      // First time someone proves they're this coach on this device → claim
+      // it as the device's identity so they can reset their own password later.
+      if (!getMyCoachId()) setMyCoachId(counselor.id);
       renderVacationCalendar();
     } else {
       errEl.hidden = false;
