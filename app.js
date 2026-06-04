@@ -255,7 +255,10 @@ function renderCounselors() {
       <div class="counselor-pw">
         ${hasPw
           ? `<span class="pw-status locked">🔒 מוגן בסיסמה</span>
-             <button type="button" class="pw-btn pw-change" data-id="${c.id}">שנה סיסמה</button>`
+             <div class="pw-actions">
+               <button type="button" class="pw-btn pw-change" data-id="${c.id}">שנה</button>
+               <button type="button" class="pw-btn pw-reset" data-id="${c.id}">🔄 איפוס</button>
+             </div>`
           : `<span class="pw-status unlocked">🔓 ללא סיסמה</span>
              <button type="button" class="pw-btn pw-set" data-id="${c.id}">🔑 הגדר סיסמה</button>`}
       </div>
@@ -279,6 +282,23 @@ function renderCounselors() {
     btn.addEventListener('click', () => promptSetPassword(btn.dataset.id, false)));
   list.querySelectorAll('.pw-change').forEach(btn =>
     btn.addEventListener('click', () => promptSetPassword(btn.dataset.id, true)));
+  list.querySelectorAll('.pw-reset').forEach(btn =>
+    btn.addEventListener('click', () => promptResetPassword(btn.dataset.id)));
+}
+
+function promptResetPassword(coachId) {
+  const c = state.counselors.find(x => x.id === coachId);
+  if (!c) return;
+  const willNeed = c.gender === 'M' ? 'הוא יצטרך' : 'היא תצטרך';
+  const toCome = c.gender === 'M' ? 'שיבוא' : 'שתבוא';
+  if (!confirm(`לאפס את הסיסמה של ${c.name}?\n${willNeed} להגדיר סיסמה חדשה לפני ${toCome} לערוך ימים.`)) return;
+  c.passwordHash = '';
+  if (currentCoachId === coachId) currentCoachId = null;
+  saveState();
+  cloudWriteCounselor(c);
+  renderCounselors();
+  if (document.querySelector('#tab-vacations.active')) renderVacationCalendar();
+  alert(`✅ הסיסמה של ${c.name} אופסה.`);
 }
 
 function escapeHTML(s) {
