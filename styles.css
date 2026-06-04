@@ -291,6 +291,27 @@ button.danger {
 .pw-btn.pw-reset { color: var(--warning); border-color: #fde68a; }
 .pw-btn.pw-reset:hover { background: #fef3c7; }
 
+.my-coach-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  background: #f1f5f9;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+.my-coach-row label {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 700;
+}
+.my-coach-row select { min-width: 180px; }
+.my-coach-hint { font-size: 13px; color: var(--muted); flex: 1; min-width: 200px; }
+
 .counselor-row .badge {
   font-size: 13px;
   font-weight: 700;
