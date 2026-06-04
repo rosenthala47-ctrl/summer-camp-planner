@@ -517,6 +517,7 @@ activityForm.addEventListener('submit', e => {
     days: parseInt(document.getElementById('activity-days').value, 10),
     type: document.getElementById('activity-type').value,
     notes: document.getElementById('activity-notes').value.trim(),
+    showInCamperBoard: document.getElementById('activity-in-board').checked,
   };
 
   if (id) {
@@ -569,6 +570,7 @@ function updateLiveConflict() {
 function resetActivityForm() {
   document.getElementById('activity-id').value = '';
   activityForm.reset();
+  document.getElementById('activity-in-board').checked = true;
   document.getElementById('activity-cancel').hidden = true;
   document.getElementById('activity-warning').innerHTML = '';
 }
@@ -582,6 +584,7 @@ function editActivity(id) {
   document.getElementById('activity-days').value = a.days;
   document.getElementById('activity-type').value = a.type;
   document.getElementById('activity-notes').value = a.notes || '';
+  document.getElementById('activity-in-board').checked = a.showInCamperBoard !== false;
   document.getElementById('activity-cancel').hidden = false;
   updateLiveConflict();
   document.getElementById('activity-form').scrollIntoView({ behavior: 'smooth' });
@@ -617,6 +620,9 @@ function renderActivities() {
           📅 ${formatHebrewDate(a.startDate)}${a.days > 1 ? ' עד ' + formatHebrewDate(endDate) : ''}
           · ${a.days} ${a.days === 1 ? 'יום' : 'ימים'}
         </div>
+        <div class="activity-meta">${a.showInCamperBoard !== false
+          ? '🗓️ <span style="color:#16a34a">מופיע בלוח לחניכים</span>'
+          : '🚫 <span style="color:#94a3b8">מוסתר מהלוח לחניכים</span>'}</div>
         ${a.notes ? `<div class="activity-meta">📝 ${escapeHTML(a.notes)}</div>` : ''}
         ${issues.length ? `<div class="activity-conflict-msg">⚠️ ${issues.join(' • ')}</div>` : ''}
       </div>
@@ -790,157 +796,100 @@ function closeBoard() {
 function renderBoard() {
   const el = document.getElementById('board-content');
 
-  // Build activity color map (stable per activity id)
+  // Camper-facing board: ONLY activities flagged for the camper board.
+  // No counselor names, vacations, or conflicts — campers just see what's on.
+  const boardActivities = state.activities
+    .filter(a => a.showInCamperBoard !== false)
+    .slice()
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+
+  // Stable, distinct color per activity.
   const actColorMap = {};
-  state.activities.forEach((a, i) => {
+  boardActivities.forEach((a, i) => {
     actColorMap[a.id] = ACTIVITY_COLORS[i % ACTIVITY_COLORS.length];
   });
 
-  // Build day-info map
-  const dayInfo = {}; // iso → { activities: [...], unavailable: [...], conflicts: [...] }
-  state.activities.forEach(a => {
-    const issues = detectConflicts(a);
+  // Map each in-camp day → list of activities happening on it.
+  const dayActs = {};
+  boardActivities.forEach(a => {
     rangeISO(a.startDate, a.days).forEach(d => {
-      if (!dayInfo[d]) dayInfo[d] = { activities: [], unavailable: [], conflicts: [] };
-      dayInfo[d].activities.push(a);
-      if (issues.length) dayInfo[d].conflicts.push(a);
+      if (!isInCamp(d)) return;
+      (dayActs[d] = dayActs[d] || []).push(a);
     });
   });
-  state.counselors.forEach((c, ci) => {
-    c.vacationDates.forEach(d => {
-      if (!dayInfo[d]) dayInfo[d] = { activities: [], unavailable: [], conflicts: [] };
-      dayInfo[d].unavailable.push({ ...c, colorIndex: ci });
-    });
-  });
-
-  // Count stats
-  let totalAct = 0, totalConflict = 0, freeDays = 0;
-  for (let d = parseISO(CAMP_START); d <= parseISO(CAMP_END); d.setDate(d.getDate() + 1)) {
-    const info = dayInfo[toISO(d)];
-    if (!info || (!info.activities.length && !info.unavailable.length)) freeDays++;
-    if (info?.activities.length) totalAct++;
-    if (info?.conflicts.length) totalConflict++;
-  }
 
   const now = new Date();
-  const generatedStr = `${now.getDate()}.${now.getMonth()+1}.${now.getFullYear()}`;
+  const generatedStr = `${now.getDate()}.${now.getMonth() + 1}.${now.getFullYear()}`;
 
-  // HTML
   let html = `
-    <div class="board-header">
-      <div class="board-title">🌞 לוח חופש גדול</div>
-      <div class="board-subtitle">${formatHebrewDate(CAMP_START)} — ${formatHebrewDate(CAMP_END)} &nbsp;·&nbsp; ${countCampDays()} ימים</div>
-      <div class="board-counselors">
-        ${state.counselors.map((c,i) => `
-          <div class="board-counselor-chip ${c.gender}">
-            ${c.gender==='M'?'👦':'👧'} ${escapeHTML(c.name)}
-            ${c.vacationDates.length ? `<span style="font-weight:400;font-size:12px;opacity:0.7">(${c.vacationDates.length} ימי חופשה)</span>` : ''}
-          </div>`).join('')}
-      </div>
-      <div style="margin-top:12px;font-size:13px;color:#94a3b8">הופק ב-${generatedStr}</div>
+    <div class="cb-header">
+      <div class="cb-title">🌞 לוח פעילויות הקיץ</div>
+      <div class="cb-subtitle">${formatHebrewDate(CAMP_START)} — ${formatHebrewDate(CAMP_END)}</div>
     </div>
   `;
 
-  // Month sections
-  const months = monthsBetween(CAMP_START, CAMP_END);
-  months.forEach(({ year, month }) => {
-    html += `<div class="board-month-section">`;
-    html += `<div class="board-month-title">${HEBREW_MONTHS[month] || `${month}/${year}`}</div>`;
-    html += buildBoardMonthTable(year, month, dayInfo, actColorMap);
-    html += `</div>`;
-  });
-
-  // Activity index
-  if (state.activities.length) {
-    html += `<div class="board-index">`;
-    html += `<div class="board-index-title">📋 רשימת פעילויות</div>`;
-    html += `<div class="board-index-grid">`;
-    state.activities.forEach(a => {
-      const col = actColorMap[a.id];
-      const issues = detectConflicts(a);
-      const endDate = addDays(a.startDate, a.days - 1);
-      html += `
-        <div class="board-index-item">
-          <div class="board-index-dot" style="background:${col.dot}"></div>
-          <div class="board-index-info">
-            <div class="board-index-name">${escapeHTML(a.name)}</div>
-            <div class="board-index-meta">
-              ${formatHebrewDate(a.startDate)}${a.days>1?' – '+formatHebrewDate(endDate):''} · ${a.days} ${a.days===1?'יום':'ימים'}
-              <br>${TYPE_LABEL[a.type]}
-              ${a.notes ? `<br>📝 ${escapeHTML(a.notes)}` : ''}
-            </div>
-            ${issues.length ? `<div class="board-index-conflict">⚠️ ${issues[0]}${issues.length>1?` +${issues.length-1} נוספים`:''}</div>` : ''}
-          </div>
-        </div>`;
-    });
-    html += `</div></div>`;
+  if (boardActivities.length === 0) {
+    html += `<div class="cb-empty">
+      <div style="font-size:40px;margin-bottom:10px">🗓️</div>
+      עדיין לא סומנו פעילויות ללוח החניכים.<br>
+      בלשונית "🎯 פעילויות" סמנו <b>"🗓️ להציג בלוח לחניכים"</b> עבור הפעילויות שתרצו לשתף.
+    </div>`;
+    el.innerHTML = html;
+    return;
   }
 
-  html += `<div class="board-footer-note">
-    ${totalAct} ימי פעילות · ${freeDays} ימים פנויים
-    ${totalConflict ? ` · <span style="color:#dc2626">⚠️ ${totalConflict} ימי קונפליקט</span>` : ' · ✅ ללא קונפליקטים'}
-  </div>`;
+  const months = monthsBetween(CAMP_START, CAMP_END);
+  months.forEach(({ year, month }) => {
+    html += buildCamperMonth(year, month, dayActs, actColorMap);
+  });
+
+  // Friendly activity legend.
+  html += `<div class="cb-legend"><div class="cb-legend-title">🎯 הפעילויות שלנו</div><div class="cb-legend-grid">`;
+  boardActivities.forEach(a => {
+    const col = actColorMap[a.id];
+    const endDate = addDays(a.startDate, a.days - 1);
+    html += `
+      <div class="cb-legend-item" style="border-right:6px solid ${col.dot}">
+        <div class="cb-legend-name">${escapeHTML(a.name)}</div>
+        <div class="cb-legend-meta">📅 ${formatHebrewDate(a.startDate)}${a.days > 1 ? ' – ' + formatHebrewDate(endDate) : ''}${a.notes ? ' · 📝 ' + escapeHTML(a.notes) : ''}</div>
+      </div>`;
+  });
+  html += `</div></div>`;
+
+  html += `<div class="cb-footer">קיץ מהמם מחכה לכם! ☀️ &nbsp;·&nbsp; הופק ב-${generatedStr}</div>`;
 
   el.innerHTML = html;
 }
 
-function buildBoardMonthTable(year, month, dayInfo, actColorMap) {
+function buildCamperMonth(year, month, dayActs, actColorMap) {
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstWeekday = new Date(year, month - 1, 1).getDay(); // Sun=0
 
-  let table = `<table class="board-cal">
-    <thead><tr>
-      ${HEBREW_DAYS.map(d => `<th>${d}</th>`).join('')}
-    </tr></thead><tbody>`;
+  let html = `<div class="cb-month">`;
+  html += `<div class="cb-month-title">${HEBREW_MONTHS[month] || `${month}/${year}`}</div>`;
+  html += `<div class="cb-weekdays">${HEBREW_DAYS.map(d => `<div class="cb-weekday">${d}</div>`).join('')}</div>`;
+  html += `<div class="cb-grid">`;
 
-  let day = 1 - firstWeekday; // may go negative (days before month start)
-  while (day <= daysInMonth) {
-    table += '<tr>';
-    for (let col = 0; col < 7; col++, day++) {
-      if (day < 1 || day > daysInMonth) {
-        table += '<td class="outside"></td>';
-        continue;
-      }
-      const iso = toISO(new Date(year, month - 1, day));
-      const inCamp = isInCamp(iso);
-      table += `<td${!inCamp ? ' class="outside"' : ''}>`;
+  // Leading blanks before the 1st of the month.
+  for (let i = 0; i < firstWeekday; i++) html += `<div class="cb-cell blank"></div>`;
 
-      if (inCamp) {
-        const info = dayInfo[iso] || { activities: [], unavailable: [], conflicts: [] };
-        const hasConflict = info.conflicts.length > 0;
-
-        table += `<div class="bd-date">${day}</div>`;
-        if (hasConflict) table += `<div class="bd-conflict-flag">⚠️</div>`;
-
-        // Show all activities for this day
-        info.activities.forEach(a => {
-          const col = actColorMap[a.id];
-          const isStart = a.startDate === iso;
-          const typeClass = TYPE_CLASS[a.type];
-          const contClass = isStart ? '' : ' act-cont';
-          const label = isStart ? escapeHTML(a.name) : '↩ ' + escapeHTML(a.name);
-          table += `<div class="bd-activity-bar ${typeClass}${contClass}" style="background:${col.bg};color:${col.text};border-right-color:${col.dot}" title="${escapeHTML(a.name)}">${label}</div>`;
-        });
-
-        // Unavailable counselor dots
-        if (info.unavailable.length) {
-          table += '<div class="bd-dots">';
-          info.unavailable.forEach(c => {
-            table += `<div class="bd-dot" style="background:${COUNSELOR_COLORS[state.counselors.findIndex(x=>x.id===c.id)%COUNSELOR_COLORS.length]}" title="${escapeHTML(c.name)} — בחופשה"></div>`;
-          });
-          table += '</div>';
-        }
-      } else {
-        table += `<div class="bd-date" style="color:#cbd5e1">${day}</div>`;
-      }
-
-      table += '</td>';
+  for (let day = 1; day <= daysInMonth; day++) {
+    const iso = toISO(new Date(year, month - 1, day));
+    if (!isInCamp(iso)) {
+      html += `<div class="cb-cell outside"><div class="cb-daynum">${day}</div></div>`;
+      continue;
     }
-    table += '</tr>';
+    const acts = dayActs[iso] || [];
+    html += `<div class="cb-cell${acts.length ? ' has-act' : ''}"><div class="cb-daynum">${day}</div>`;
+    acts.forEach(a => {
+      const col = actColorMap[a.id];
+      html += `<div class="cb-act" style="background:${col.bg};color:${col.text}">${escapeHTML(a.name)}</div>`;
+    });
+    html += `</div>`;
   }
 
-  table += '</tbody></table>';
-  return table;
+  html += `</div></div>`;
+  return html;
 }
 
 // ---------------- Vacation-vs-Activity conflict resolution ----------------
