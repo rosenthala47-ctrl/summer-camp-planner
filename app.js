@@ -741,9 +741,6 @@ function initRender() {
   renderActivities();
 }
 
-applyLocalVacationReset();
-initRender();
-
 // ---------------- Schedule Board ----------------
 const ACTIVITY_COLORS = [
   { bg:'#ede9fe', text:'#5b21b6', dot:'#7c3aed' },
@@ -1122,8 +1119,6 @@ const DEFAULT_FIREBASE_CONFIG = {
   messagingSenderId: "77485499740",
   appId: "1:77485499740:web:52b13f0275363fe9b48d99",
 };
-const DEFAULT_GROUP_CODE = 'main';
-
 let cloudState = {
   active: false,
   db: null,
@@ -1148,7 +1143,8 @@ function setCloudIndicator(status, label) {
 
 async function initCloud() {
   const cfgRaw = localStorage.getItem(CLOUD_CFG_KEY);
-  const groupCode = localStorage.getItem(CLOUD_GROUP_KEY) || DEFAULT_GROUP_CODE;
+  const groupCode = localStorage.getItem(CLOUD_GROUP_KEY);
+  if (!groupCode) return; // boot() routes new users through onboarding first
   try {
     const cfg = cfgRaw ? JSON.parse(cfgRaw) : DEFAULT_FIREBASE_CONFIG;
     setCloudIndicator('syncing', 'מתחבר...');
@@ -1170,19 +1166,20 @@ async function initCloud() {
     const activitiesCol = collection(db, 'camps', groupCode, 'activities');
     const notificationsCol = collection(db, 'camps', groupCode, 'notifications');
 
-    // Seed counselors if empty (first-ever connection for this group)
+    // Seed counselors if this group is empty in the cloud AND we have a
+    // locally configured team (set up via onboarding). For a fresh "join" we
+    // intentionally leave the local team empty so we don't seed default
+    // placeholders into someone else's group.
     const seedSnap = await getDocs(counselorsCol);
-    if (seedSnap.empty) {
+    if (seedSnap.empty && state.counselors.length > 0) {
       const batch = writeBatch(db);
-      const seed = state.counselors.length === 4 ? state.counselors : DEFAULT_STATE.counselors;
-      seed.forEach(c => {
+      state.counselors.forEach(c => {
         batch.set(doc(db, 'camps', groupCode, 'counselors', c.id), {
           id: c.id, name: c.name, gender: c.gender,
           vacationDates: c.vacationDates || [],
           passwordHash: c.passwordHash || '',
         });
       });
-      // Also seed any local activities
       state.activities.forEach(a => {
         batch.set(doc(db, 'camps', groupCode, 'activities', a.id), a);
       });
@@ -1508,8 +1505,172 @@ document.getElementById('btn-copy-group-code').addEventListener('click', () => {
   });
 });
 
-// Kick off cloud after initial render
-initCloud();
+// ---------------- First-time onboarding & boot ----------------
+// We intentionally do NOT auto-route any returning user to the original shared
+// group "main" — that's the privacy leak this whole feature exists to close.
+// Every visitor without an explicit CLOUD_GROUP_KEY goes through onboarding.
+// Members of the original team enter the code "main" once per device to
+// re-attach to their existing data; everyone else creates a fresh team.
+
+function showOnboardingStep(name) {
+  document.querySelectorAll('#onboarding-overlay .onb-step').forEach(el => el.hidden = true);
+  const step = document.getElementById('onb-' + name);
+  if (step) step.hidden = false;
+}
+
+function showOnboarding() {
+  document.getElementById('onboarding-overlay').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  showOnboardingStep('welcome');
+}
+
+function hideOnboarding() {
+  document.getElementById('onboarding-overlay').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function generateGroupCode() {
+  return 'team-' + Math.random().toString(36).slice(2, 8);
+}
+
+function buildOnboardingCounselorsList(count) {
+  const wrap = document.getElementById('onb-counselors');
+  wrap.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const male = i < Math.ceil(count / 2);
+    const row = document.createElement('div');
+    row.className = 'onb-counselor-row';
+    row.innerHTML = `
+      <label style="margin:0">שם:
+        <input type="text" class="onb-name" placeholder="${male ? 'מדריך' : 'מדריכה'} ${i + 1}">
+      </label>
+      <label style="margin:0">מגדר:
+        <select class="onb-gender">
+          <option value="M" ${male ? 'selected' : ''}>זכר</option>
+          <option value="F" ${male ? '' : 'selected'}>נקבה</option>
+        </select>
+      </label>
+    `;
+    wrap.appendChild(row);
+  }
+}
+
+function createNewTeam() {
+  const rows = document.querySelectorAll('#onb-counselors .onb-counselor-row');
+  if (rows.length === 0) { alert('יש להזין לפחות מדריך אחד'); return; }
+  const counselors = [];
+  rows.forEach((row, i) => {
+    const nameInput = row.querySelector('.onb-name');
+    const genderSel = row.querySelector('.onb-gender');
+    const name = (nameInput.value.trim() || nameInput.placeholder || 'מדריך ' + (i + 1));
+    counselors.push({
+      id: 'c' + (i + 1),
+      name,
+      gender: genderSel.value,
+      vacationDates: [],
+      passwordHash: '',
+    });
+  });
+  const groupCode = generateGroupCode();
+  state.counselors = counselors;
+  state.activities = [];
+  saveState();
+  localStorage.setItem(CLOUD_GROUP_KEY, groupCode);
+  // Mark the local reset as already applied so it won't fire on fresh data.
+  localStorage.setItem(LOCAL_RESET_KEY, RESET_TOKEN);
+  document.getElementById('onb-code-display').textContent = groupCode;
+  showOnboardingStep('done');
+}
+
+async function validateGroupExists(code) {
+  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
+  const { getFirestore, collection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js');
+  const app = initializeApp(DEFAULT_FIREBASE_CONFIG, 'join-check');
+  const db = getFirestore(app);
+  const snap = await getDocs(collection(db, 'camps', code, 'counselors'));
+  return !snap.empty;
+}
+
+async function joinExistingTeam() {
+  const code = document.getElementById('onb-group-code').value.trim();
+  const errEl = document.getElementById('onb-join-error');
+  const btn = document.getElementById('onb-do-join');
+  errEl.hidden = true;
+  if (!code) { errEl.hidden = false; errEl.textContent = 'יש להזין קוד צוות.'; return; }
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'בודק...';
+  try {
+    const exists = await validateGroupExists(code);
+    if (!exists) {
+      errEl.hidden = false;
+      errEl.textContent = `❌ הקוד "${code}" לא קיים. בדוק/י שוב.`;
+      return;
+    }
+  } catch (e) {
+    console.error('join validate failed', e);
+    errEl.hidden = false;
+    errEl.textContent = '❌ שגיאת רשת. נסה/י שוב.';
+    return;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+  // Leave the local team empty so we don't seed defaults into the joined group.
+  state.counselors = [];
+  state.activities = [];
+  saveState();
+  localStorage.setItem(CLOUD_GROUP_KEY, code);
+  localStorage.setItem(LOCAL_RESET_KEY, RESET_TOKEN);
+  hideOnboarding();
+  initRender();
+  initCloud();
+}
+
+function finishOnboarding() {
+  hideOnboarding();
+  initRender();
+  initCloud();
+}
+
+function wireOnboarding() {
+  document.getElementById('onb-new').addEventListener('click', () => {
+    showOnboardingStep('new-form');
+    buildOnboardingCounselorsList(+document.getElementById('onb-count').value || 4);
+  });
+  document.getElementById('onb-join').addEventListener('click', () => showOnboardingStep('join-form'));
+  document.getElementById('onb-back-1').addEventListener('click', () => showOnboardingStep('welcome'));
+  document.getElementById('onb-back-2').addEventListener('click', () => showOnboardingStep('welcome'));
+  document.getElementById('onb-count').addEventListener('input', e => {
+    const n = Math.max(1, Math.min(10, +e.target.value || 4));
+    buildOnboardingCounselorsList(n);
+  });
+  document.getElementById('onb-create').addEventListener('click', createNewTeam);
+  document.getElementById('onb-do-join').addEventListener('click', joinExistingTeam);
+  document.getElementById('onb-finish').addEventListener('click', finishOnboarding);
+  document.getElementById('onb-copy-code').addEventListener('click', () => {
+    const code = document.getElementById('onb-code-display').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+      const btn = document.getElementById('onb-copy-code');
+      const orig = btn.textContent;
+      btn.textContent = '✓ הועתק';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  });
+}
+
+function boot() {
+  applyLocalVacationReset();
+  wireOnboarding();
+  if (!localStorage.getItem(CLOUD_GROUP_KEY)) {
+    showOnboarding();
+    return;
+  }
+  initRender();
+  initCloud();
+}
+
+boot();
 
 // ---------------- PWA Service Worker ----------------
 if ('serviceWorker' in navigator) {
