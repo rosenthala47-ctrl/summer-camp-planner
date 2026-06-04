@@ -12,6 +12,13 @@ const STORAGE_KEY = 'summerCampPlanner_v1';
 const RESET_TOKEN = 'vacations-reset-2026-05';
 const LOCAL_RESET_KEY = 'summerCampPlanner_resetToken_v1';
 
+// One-time targeted password clears, applied once per shared group via a
+// Firestore meta token. Any counselor whose name matches one in
+// PASSWORD_RESET_NAMES has their passwordHash wiped so they can set a fresh
+// password. Bump the token to trigger again.
+const PASSWORD_RESET_TOKEN = 'pw-reset-2026-05-a';
+const PASSWORD_RESET_NAMES = ['גפן'];
+
 const HEBREW_MONTHS = {
   6: 'יוני 2026',
   7: 'יולי 2026',
@@ -77,15 +84,6 @@ function applyLocalVacationReset() {
 // only — a page reload requires logging in again.
 let currentCoachId = null;
 
-// The self-claimed coach identity for THIS device, persisted in localStorage.
-// Gates the "reset password" button so each coach can only reset their own.
-const MY_COACH_KEY = 'summerCampPlanner_myCoachId_v1';
-function getMyCoachId() { return localStorage.getItem(MY_COACH_KEY) || ''; }
-function setMyCoachId(id) {
-  if (id) localStorage.setItem(MY_COACH_KEY, id);
-  else localStorage.removeItem(MY_COACH_KEY);
-}
-
 async function hashPassword(pw) {
   const data = new TextEncoder().encode(String(pw));
   const buf = await crypto.subtle.digest('SHA-256', data);
@@ -113,13 +111,18 @@ async function promptSetPassword(coachId, isChange) {
       return;
     }
   }
-  const pw = prompt(`בחר/י סיסמה חדשה ל${c.name} (משהו פשוט וקל לזכור):`);
+  const pw = prompt(
+    `בחר/י סיסמה חדשה ל${c.name}.\n\n` +
+    `⚠️ חשוב מאוד לזכור את הסיסמה!\n` +
+    `אין דרך לאפס סיסמה שנשכחה — מי ששוכח את הסיסמה לא יוכל יותר לערוך את הימים שלו באתר.\n\n` +
+    `(לפחות 3 תווים)`
+  );
   if (pw === null) return;
   if (pw.trim().length < 3) {
     alert('הסיסמה צריכה להיות לפחות 3 תווים.');
     return;
   }
-  const confirmPw = prompt('הקלד/י שוב את הסיסמה לאישור:');
+  const confirmPw = prompt('הקלד/י שוב את הסיסמה לאישור (וודא/י שאת/ה זוכר/ת אותה — אין איפוס):');
   if (confirmPw === null) return;
   if (pw !== confirmPw) {
     alert('הסיסמאות לא תואמות. נסה/י שוב.');
@@ -129,7 +132,7 @@ async function promptSetPassword(coachId, isChange) {
   saveState();
   cloudWriteCounselor(c);
   renderCounselors();
-  alert(`✅ הסיסמה של ${c.name} נשמרה.`);
+  alert(`✅ הסיסמה של ${c.name} נשמרה.\n\n⚠️ זכור/י את הסיסמה — אין דרך לאפס אותה!`);
 }
 
 // ---------------- Date helpers ----------------
@@ -246,30 +249,12 @@ document.querySelectorAll('.tab').forEach(btn => {
 function renderCounselors() {
   const list = document.getElementById('counselors-list');
   list.innerHTML = '';
-
-  // Self-identity selector: which row "belongs to" this device. Only this
-  // coach's "reset password" button is shown — others can't reset for you.
-  const myId = getMyCoachId();
-  const idBar = document.createElement('div');
-  idBar.className = 'my-coach-row';
-  idBar.innerHTML = `
-    <label>אני:
-      <select id="my-coach-select">
-        <option value="" ${!myId ? 'selected' : ''}>— בחר/י את שמך —</option>
-        ${state.counselors.map(c => `<option value="${c.id}" ${c.id === myId ? 'selected' : ''}>${escapeHTML(c.name)}</option>`).join('')}
-      </select>
-    </label>
-    <span class="my-coach-hint">הבחירה נשמרת במכשיר הזה ומחליטה ליד מי יוצג כפתור "🔄 איפוס סיסמה".</span>
-  `;
-  list.appendChild(idBar);
-
   state.counselors.forEach((c, idx) => {
     const row = document.createElement('div');
     row.className = `counselor-row ${c.gender === 'M' ? 'male' : 'female'}`;
     const hasPw = coachHasPassword(c);
-    const isMe = myId === c.id;
     row.innerHTML = `
-      <div class="badge">${c.gender === 'M' ? '👦 מדריך' : '👧 מדריכה'}${isMe ? ' ⭐' : ''}</div>
+      <div class="badge">${c.gender === 'M' ? '👦 מדריך' : '👧 מדריכה'}</div>
       <label>שם:
         <input type="text" data-idx="${idx}" data-field="name" value="${escapeHTML(c.name)}">
       </label>
@@ -282,20 +267,12 @@ function renderCounselors() {
       <div class="counselor-pw">
         ${hasPw
           ? `<span class="pw-status locked">🔒 מוגן בסיסמה</span>
-             <div class="pw-actions">
-               <button type="button" class="pw-btn pw-change" data-id="${c.id}">שנה</button>
-               ${isMe ? `<button type="button" class="pw-btn pw-reset" data-id="${c.id}">🔄 איפוס</button>` : ''}
-             </div>`
+             <button type="button" class="pw-btn pw-change" data-id="${c.id}">שנה סיסמה</button>`
           : `<span class="pw-status unlocked">🔓 ללא סיסמה</span>
              <button type="button" class="pw-btn pw-set" data-id="${c.id}">🔑 הגדר סיסמה</button>`}
       </div>
     `;
     list.appendChild(row);
-  });
-
-  document.getElementById('my-coach-select').addEventListener('change', e => {
-    setMyCoachId(e.target.value);
-    renderCounselors();
   });
 
   list.querySelectorAll('input[data-field], select[data-field]').forEach(el => {
@@ -314,26 +291,6 @@ function renderCounselors() {
     btn.addEventListener('click', () => promptSetPassword(btn.dataset.id, false)));
   list.querySelectorAll('.pw-change').forEach(btn =>
     btn.addEventListener('click', () => promptSetPassword(btn.dataset.id, true)));
-  list.querySelectorAll('.pw-reset').forEach(btn =>
-    btn.addEventListener('click', () => promptResetPassword(btn.dataset.id)));
-}
-
-function promptResetPassword(coachId) {
-  // Defensive: only the device's self-claimed identity may reset its password.
-  if (coachId !== getMyCoachId()) {
-    alert('אפשר לאפס רק את הסיסמה של עצמך. בחר/י את שמך ב"אני:" בראש הלשונית.');
-    return;
-  }
-  const c = state.counselors.find(x => x.id === coachId);
-  if (!c) return;
-  if (!confirm(`לאפס את הסיסמה שלך (${c.name})?\nאחר כך תצטרך/י להגדיר סיסמה חדשה לפני שתוכל/י לערוך ימים.`)) return;
-  c.passwordHash = '';
-  if (currentCoachId === coachId) currentCoachId = null;
-  saveState();
-  cloudWriteCounselor(c);
-  renderCounselors();
-  if (document.querySelector('#tab-vacations.active')) renderVacationCalendar();
-  alert(`✅ הסיסמה של ${c.name} אופסה.`);
 }
 
 function escapeHTML(s) {
@@ -375,7 +332,8 @@ function renderVacationCalendar() {
   if (!coachHasPassword(counselor)) {
     if (authBox) authBox.innerHTML = `<div class="warning-box info">
       🔑 ל${escapeHTML(counselor.name)} עדיין אין סיסמה. כדי להגן על הימים, עברו ללשונית
-      <b>👥 מדריכים</b> ולחצו "הגדר סיסמה". עד אז אי אפשר לערוך כאן.
+      <b>👥 מדריכים</b> ולחצו "הגדר סיסמה". עד אז אי אפשר לערוך כאן.<br>
+      <b style="color:var(--danger)">⚠️ חשוב לזכור את הסיסמה — אין אפשרות לאפס אותה.</b>
     </div>`;
     renderVacationMonths(container, counselor, false);
     return;
@@ -421,9 +379,6 @@ function wireVacationLogin(counselor) {
   const submit = async () => {
     if (await verifyCoachPassword(counselor.id, input.value)) {
       currentCoachId = counselor.id;
-      // First time someone proves they're this coach on this device → claim
-      // it as the device's identity so they can reset their own password later.
-      if (!getMyCoachId()) setMyCoachId(counselor.id);
       renderVacationCalendar();
     } else {
       errEl.hidden = false;
@@ -1259,6 +1214,29 @@ async function initCloud() {
       }
     } catch (e) {
       console.error('cloud vacation reset failed', e);
+    }
+
+    // One-time targeted password reset: wipe passwordHash for any counselor
+    // whose name appears in PASSWORD_RESET_NAMES (e.g., a coach who forgot
+    // their password). Idempotent — gated by a meta token.
+    try {
+      const metaRef = doc(db, 'camps', groupCode, 'meta', 'state');
+      const metaSnap = await getDoc(metaRef);
+      const applied = metaSnap.exists() ? metaSnap.data().passwordResetToken : null;
+      if (applied !== PASSWORD_RESET_TOKEN) {
+        const curSnap = await getDocs(counselorsCol);
+        const batch = writeBatch(db);
+        curSnap.forEach(d => {
+          const data = d.data();
+          if (PASSWORD_RESET_NAMES.includes(data.name)) {
+            batch.update(d.ref, { passwordHash: '' });
+          }
+        });
+        batch.set(metaRef, { passwordResetToken: PASSWORD_RESET_TOKEN, pwResetAt: Date.now() }, { merge: true });
+        await batch.commit();
+      }
+    } catch (e) {
+      console.error('cloud password reset failed', e);
     }
 
     // Counselors live listener
