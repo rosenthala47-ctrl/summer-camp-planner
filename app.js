@@ -776,10 +776,70 @@ const TYPE_CLASS = { all:'act-all', split:'act-split', boys:'act-boys', girls:'a
 const TYPE_LABEL = { all:'כל המחנה', split:'מפוצל', boys:'בנים בלבד', girls:'בנות בלבד' };
 const COUNSELOR_COLORS = ['#3b82f6','#8b5cf6','#ec4899','#f97316'];
 
+// ---------------- Countdown to camp start (live, every second) ----------------
+let mainCountdownInterval = null;
+let boardCountdownInterval = null;
+
+function timeUntilCampStart() {
+  const start = parseISO(CAMP_START);
+  start.setHours(0, 0, 0, 0);
+  const ms = start - new Date();
+  if (ms <= 0) return null;
+  return {
+    days: Math.floor(ms / 86400000),
+    hours: Math.floor((ms % 86400000) / 3600000),
+    minutes: Math.floor((ms % 3600000) / 60000),
+    seconds: Math.floor((ms % 60000) / 1000),
+  };
+}
+
+function renderCountdownInto(el, big) {
+  if (!el) return;
+  const t = timeUntilCampStart();
+  if (!t) { el.hidden = true; return; }
+  el.hidden = false;
+  const numClass = big ? 'cb-cd-number' : 'cd-number';
+  let html;
+  if (t.days >= 1) {
+    html = `<span class="cd-icon">⏰</span><span>עוד</span>` +
+           `<span class="${numClass}">${t.days}</span>` +
+           `<span>${t.days === 1 ? 'יום' : 'ימים'} ל${big ? 'חופש הגדול' : 'קייטנה'}</span>` +
+           `<span class="cd-icon">${big ? '☀️' : '🌞'}</span>`;
+  } else {
+    const hh = String(t.hours).padStart(2, '0');
+    const mm = String(t.minutes).padStart(2, '0');
+    const ss = String(t.seconds).padStart(2, '0');
+    html = `<span class="cd-icon">🎉</span><span>עוד</span>` +
+           `<span class="${numClass}">${hh}:${mm}:${ss}</span>` +
+           `<span>ל${big ? 'חופש הגדול' : 'קייטנה'}!</span>`;
+  }
+  if (el.innerHTML !== html) el.innerHTML = html;
+}
+
+function renderMainCountdown() { renderCountdownInto(document.getElementById('main-countdown'), false); }
+function renderBoardCountdown() { renderCountdownInto(document.querySelector('.js-board-countdown'), true); }
+
+function startMainCountdown() {
+  renderMainCountdown();
+  if (mainCountdownInterval) clearInterval(mainCountdownInterval);
+  mainCountdownInterval = setInterval(renderMainCountdown, 1000);
+}
+
+function startBoardCountdown() {
+  renderBoardCountdown();
+  if (boardCountdownInterval) clearInterval(boardCountdownInterval);
+  boardCountdownInterval = setInterval(renderBoardCountdown, 1000);
+}
+
+function stopBoardCountdown() {
+  if (boardCountdownInterval) { clearInterval(boardCountdownInterval); boardCountdownInterval = null; }
+}
+
 document.getElementById('btn-update-board').addEventListener('click', () => {
   renderBoard();
   document.getElementById('board-overlay').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
+  startBoardCountdown();
 });
 
 document.getElementById('btn-close-board').addEventListener('click', closeBoard);
@@ -791,25 +851,24 @@ document.getElementById('btn-print-board').addEventListener('click', () => windo
 function closeBoard() {
   document.getElementById('board-overlay').classList.add('hidden');
   document.body.style.overflow = '';
+  stopBoardCountdown();
 }
 
 function renderBoard() {
   const el = document.getElementById('board-content');
 
   // Camper-facing board: ONLY activities flagged for the camper board.
-  // No counselor names, vacations, or conflicts — campers just see what's on.
+  // No counselor vacations or conflicts — campers just see what's on.
   const boardActivities = state.activities
     .filter(a => a.showInCamperBoard !== false)
     .slice()
     .sort((a, b) => a.startDate.localeCompare(b.startDate));
 
-  // Stable, distinct color per activity.
   const actColorMap = {};
   boardActivities.forEach((a, i) => {
     actColorMap[a.id] = ACTIVITY_COLORS[i % ACTIVITY_COLORS.length];
   });
 
-  // Map each in-camp day → list of activities happening on it.
   const dayActs = {};
   boardActivities.forEach(a => {
     rangeISO(a.startDate, a.days).forEach(d => {
@@ -820,17 +879,26 @@ function renderBoard() {
 
   const now = new Date();
   const generatedStr = `${now.getDate()}.${now.getMonth() + 1}.${now.getFullYear()}`;
+  const todayISO = toISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
 
+  // Festive hero with live countdown.
   let html = `
-    <div class="cb-header">
-      <div class="cb-title">🌞 לוח פעילויות הקיץ</div>
-      <div class="cb-subtitle">${formatHebrewDate(CAMP_START)} — ${formatHebrewDate(CAMP_END)}</div>
+    <div class="cb-hero">
+      <div class="cb-hero-deco cb-deco-sun">☀️</div>
+      <div class="cb-hero-deco cb-deco-beach">🏖️</div>
+      <div class="cb-hero-deco cb-deco-palm">🌴</div>
+      <div class="cb-hero-deco cb-deco-wave">🌊</div>
+      <div class="cb-hero-inner">
+        <div class="cb-title">🌞 לוח הקיץ שלנו 🏖️</div>
+        <div class="cb-subtitle">🗓️ ${formatHebrewDate(CAMP_START)} — ${formatHebrewDate(CAMP_END)} · ${countCampDays()} ימים של כיף</div>
+        <div class="cb-countdown js-board-countdown" hidden></div>
+      </div>
     </div>
   `;
 
   if (boardActivities.length === 0) {
     html += `<div class="cb-empty">
-      <div style="font-size:40px;margin-bottom:10px">🗓️</div>
+      <div style="font-size:48px;margin-bottom:10px">🗓️</div>
       עדיין לא סומנו פעילויות ללוח החניכים.<br>
       בלשונית "🎯 פעילויות" סמנו <b>"🗓️ להציג בלוח לחניכים"</b> עבור הפעילויות שתרצו לשתף.
     </div>`;
@@ -839,29 +907,39 @@ function renderBoard() {
   }
 
   const months = monthsBetween(CAMP_START, CAMP_END);
-  months.forEach(({ year, month }) => {
-    html += buildCamperMonth(year, month, dayActs, actColorMap);
+  months.forEach(({ year, month }, idx) => {
+    html += buildCamperMonth(year, month, dayActs, actColorMap, todayISO);
+    if (idx < months.length - 1) html += `<div class="cb-divider">✦ &nbsp; ☀️ &nbsp; ✦</div>`;
   });
 
-  // Friendly activity legend.
+  // Friendly activity legend with vivid color-matched cards.
   html += `<div class="cb-legend"><div class="cb-legend-title">🎯 הפעילויות שלנו</div><div class="cb-legend-grid">`;
   boardActivities.forEach(a => {
     const col = actColorMap[a.id];
     const endDate = addDays(a.startDate, a.days - 1);
     html += `
-      <div class="cb-legend-item" style="border-right:6px solid ${col.dot}">
-        <div class="cb-legend-name">${escapeHTML(a.name)}</div>
-        <div class="cb-legend-meta">📅 ${formatHebrewDate(a.startDate)}${a.days > 1 ? ' – ' + formatHebrewDate(endDate) : ''}${a.notes ? ' · 📝 ' + escapeHTML(a.notes) : ''}</div>
+      <div class="cb-legend-item" style="background:${col.bg};border-right:8px solid ${col.dot}">
+        <div class="cb-legend-name" style="color:${col.text}">${escapeHTML(a.name)}</div>
+        <div class="cb-legend-meta">📅 ${formatHebrewDate(a.startDate)}${a.days > 1 ? ' – ' + formatHebrewDate(endDate) : ''}${a.notes ? '<br>📝 ' + escapeHTML(a.notes) : ''}</div>
       </div>`;
   });
   html += `</div></div>`;
 
-  html += `<div class="cb-footer">קיץ מהמם מחכה לכם! ☀️ &nbsp;·&nbsp; הופק ב-${generatedStr}</div>`;
+  // Warm team footer — names only, no internal availability info.
+  html += `<div class="cb-team-footer">
+    <div class="cb-team-title">💛 הצוות שלכם 💛</div>
+    <div class="cb-team-chips">
+      ${state.counselors.map(c => `<span class="cb-team-chip ${c.gender}">${c.gender === 'M' ? '👦' : '👧'} ${escapeHTML(c.name)}</span>`).join('')}
+    </div>
+    <div class="cb-team-msg">קיץ של חוויות, כיף וזיכרונות מחכה לכם! 🌞✨</div>
+  </div>`;
+
+  html += `<div class="cb-footer">להתראות בקייטנה! ⛱️ &nbsp;·&nbsp; הופק ב-${generatedStr}</div>`;
 
   el.innerHTML = html;
 }
 
-function buildCamperMonth(year, month, dayActs, actColorMap) {
+function buildCamperMonth(year, month, dayActs, actColorMap, todayISO) {
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstWeekday = new Date(year, month - 1, 1).getDay(); // Sun=0
 
@@ -870,17 +948,32 @@ function buildCamperMonth(year, month, dayActs, actColorMap) {
   html += `<div class="cb-weekdays">${HEBREW_DAYS.map(d => `<div class="cb-weekday">${d}</div>`).join('')}</div>`;
   html += `<div class="cb-grid">`;
 
-  // Leading blanks before the 1st of the month.
   for (let i = 0; i < firstWeekday; i++) html += `<div class="cb-cell blank"></div>`;
 
   for (let day = 1; day <= daysInMonth; day++) {
-    const iso = toISO(new Date(year, month - 1, day));
+    const cellDate = new Date(year, month - 1, day);
+    const iso = toISO(cellDate);
+    const dow = cellDate.getDay(); // 0=Sun, 5=Fri, 6=Sat
+    const isWeekend = dow === 5 || dow === 6;
+
     if (!isInCamp(iso)) {
-      html += `<div class="cb-cell outside"><div class="cb-daynum">${day}</div></div>`;
+      html += `<div class="cb-cell outside${isWeekend ? ' weekend' : ''}"><div class="cb-daynum">${day}</div></div>`;
       continue;
     }
+
     const acts = dayActs[iso] || [];
-    html += `<div class="cb-cell${acts.length ? ' has-act' : ''}"><div class="cb-daynum">${day}</div>`;
+    const classes = ['cb-cell'];
+    if (acts.length) classes.push('has-act');
+    if (isWeekend) classes.push('weekend');
+    if (iso === todayISO) classes.push('today');
+    if (iso === CAMP_START) classes.push('camp-start');
+    if (iso === CAMP_END) classes.push('camp-end');
+
+    html += `<div class="${classes.join(' ')}">`;
+    html += `<div class="cb-daynum">${day}</div>`;
+    if (iso === CAMP_START) html += `<div class="cb-badge cb-badge-start">🎉 פתיחה!</div>`;
+    if (iso === CAMP_END) html += `<div class="cb-badge cb-badge-end">🌅 יום סיום</div>`;
+    if (iso === todayISO) html += `<div class="cb-badge cb-badge-today">👈 היום</div>`;
     acts.forEach(a => {
       const col = actColorMap[a.id];
       html += `<div class="cb-act" style="background:${col.bg};color:${col.text}">${escapeHTML(a.name)}</div>`;
@@ -1647,6 +1740,7 @@ function wireOnboarding() {
 function boot() {
   applyLocalVacationReset();
   wireOnboarding();
+  startMainCountdown();
   if (!localStorage.getItem(CLOUD_GROUP_KEY)) {
     showOnboarding();
     return;
