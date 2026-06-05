@@ -97,6 +97,31 @@ header h1 {
   50% { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
 }
 
+/* Live countdown chip in the main app header */
+.header-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px auto 0;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  backdrop-filter: blur(4px);
+}
+.header-countdown[hidden] { display: none; }
+.header-countdown .cd-number {
+  font-size: 18px;
+  font-weight: 900;
+  color: #fef9c3;
+  padding: 0 2px;
+}
+.header-countdown .cd-icon { font-size: 16px; }
+
 .tabs {
   display: flex;
   background: var(--surface);
@@ -830,35 +855,92 @@ footer {
    Board Content (printable)
    ============================================================ */
 #board-content {
-  padding: 32px 36px;
+  padding: 28px 32px 36px;
   font-family: 'Segoe UI', 'Rubik', 'Heebo', system-ui, sans-serif;
   direction: rtl;
   color: #0f172a;
   background:
-    radial-gradient(circle at 12% 0%, #eef2ff 0, transparent 40%),
-    radial-gradient(circle at 90% 5%, #fef3c7 0, transparent 35%),
-    #ffffff;
+    radial-gradient(circle at 12% 0%, #fef3c7 0, transparent 35%),
+    radial-gradient(circle at 88% 8%, #cffafe 0, transparent 30%),
+    radial-gradient(circle at 50% 100%, #fce7f3 0, transparent 35%),
+    #fffdf7;
 }
 
-/* ---- Camper board header ---- */
-.cb-header {
+/* ---- Festive hero ---- */
+.cb-hero {
+  position: relative;
   text-align: center;
-  margin-bottom: 28px;
+  padding: 36px 28px 30px;
+  margin-bottom: 30px;
+  border-radius: 26px;
+  background:
+    linear-gradient(135deg, #fef3c7 0%, #fde68a 35%, #fed7aa 70%, #fbcfe8 100%);
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(245, 158, 11, 0.18), inset 0 -3px 0 rgba(0,0,0,0.04);
 }
+.cb-hero-inner { position: relative; z-index: 1; }
+.cb-hero-deco {
+  position: absolute;
+  opacity: 0.25;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+.cb-deco-sun   { top: -22px; right: -18px; font-size: 130px; transform: rotate(-12deg); }
+.cb-deco-beach { bottom: -28px; left: -10px; font-size: 100px; transform: rotate(8deg); opacity: 0.22; }
+.cb-deco-palm  { top: 10px; left: 18px; font-size: 70px; opacity: 0.2; }
+.cb-deco-wave  { bottom: 12px; right: 24px; font-size: 60px; opacity: 0.22; }
+
 .cb-title {
-  font-size: 38px;
+  font-size: 44px;
   font-weight: 900;
-  background: linear-gradient(135deg, #2563eb, #7c3aed 55%, #ec4899);
+  background: linear-gradient(135deg, #b45309 0%, #c026d3 60%, #db2777 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   letter-spacing: -0.5px;
+  line-height: 1.1;
 }
 .cb-subtitle {
+  font-size: 17px;
+  font-weight: 700;
+  color: #b45309;
+}
+
+/* ---- Board countdown ---- */
+.cb-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 14px 24px;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 6px 18px rgba(217, 119, 6, 0.25), 0 0 0 3px rgba(255,255,255,0.6);
   font-size: 18px;
-  font-weight: 600;
-  color: #64748b;
+  font-weight: 800;
+  color: #b45309;
+}
+.cb-countdown[hidden] { display: none; }
+.cb-countdown .cb-cd-number {
+  font-size: 34px;
+  font-weight: 900;
+  color: #ea580c;
+  padding: 0 4px;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.cb-countdown .cd-icon { font-size: 22px; }
+
+/* ---- Decorative divider between months ---- */
+.cb-divider {
+  text-align: center;
+  margin: 14px 0 26px;
+  color: #c026d3;
+  letter-spacing: 8px;
+  font-size: 18px;
+  opacity: 0.7;
 }
 
 /* ---- Months ---- */
@@ -920,6 +1002,46 @@ footer {
   border-color: #c7d2fe;
   background: linear-gradient(180deg, #ffffff, #fbfcff);
 }
+.cb-cell.weekend {
+  background: linear-gradient(180deg, #fffbeb, #fef3c7);
+  border-color: #fde68a;
+}
+.cb-cell.has-act.weekend {
+  background: linear-gradient(180deg, #fffbeb, #fef3c7 70%, #fef9c3);
+}
+.cb-cell.today {
+  border: 3px solid #f59e0b;
+  background: linear-gradient(180deg, #fffbeb, #fef3c7);
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18), 0 6px 18px rgba(245, 158, 11, 0.28);
+  position: relative;
+  animation: cbTodayPulse 2.4s ease-in-out infinite;
+}
+@keyframes cbTodayPulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(245,158,11,0.18), 0 6px 18px rgba(245,158,11,0.28); }
+  50%      { box-shadow: 0 0 0 8px rgba(245,158,11,0.1),  0 8px 24px rgba(245,158,11,0.35); }
+}
+.cb-cell.camp-start {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  border-color: #10b981;
+}
+.cb-cell.camp-end {
+  background: linear-gradient(135deg, #fce7f3, #fbcfe8);
+  border-color: #ec4899;
+}
+
+.cb-badge {
+  align-self: flex-end;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.2px;
+  color: white;
+  white-space: nowrap;
+}
+.cb-badge-today { background: #f59e0b; }
+.cb-badge-start { background: #059669; }
+.cb-badge-end   { background: #db2777; }
 
 .cb-daynum {
   font-size: 18px;
@@ -928,14 +1050,16 @@ footer {
   line-height: 1;
 }
 .cb-cell.outside .cb-daynum { color: #cbd5e1; }
+.cb-cell.today .cb-daynum { color: #b45309; }
 
 .cb-act {
   border-radius: 9px;
-  padding: 6px 9px;
+  padding: 6px 10px;
   font-size: 14px;
   font-weight: 800;
   line-height: 1.25;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 /* ---- Activity legend ---- */
@@ -957,13 +1081,12 @@ footer {
   gap: 12px;
 }
 .cb-legend-item {
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: #f8fafc;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  padding: 14px 16px;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 .cb-legend-name { font-weight: 800; font-size: 16px; margin-bottom: 4px; }
-.cb-legend-meta { color: #64748b; font-size: 13px; }
+.cb-legend-meta { color: #475569; font-size: 13px; line-height: 1.5; }
 
 .cb-empty {
   text-align: center;
@@ -973,10 +1096,52 @@ footer {
   line-height: 1.7;
 }
 
-.cb-footer {
-  margin-top: 26px;
+/* ---- Team footer ---- */
+.cb-team-footer {
+  margin-top: 30px;
+  padding: 24px 20px;
+  border-radius: 22px;
   text-align: center;
-  font-size: 14px;
+  background: linear-gradient(135deg, #ede9fe 0%, #fce7f3 50%, #fef3c7 100%);
+  box-shadow: 0 6px 22px rgba(124, 58, 237, 0.12);
+}
+.cb-team-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #7c3aed;
+  margin-bottom: 14px;
+}
+.cb-team-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.cb-team-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 700;
+  background: white;
+  border: 2px solid;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+.cb-team-chip.M { color: #1e40af; border-color: #93c5fd; }
+.cb-team-chip.F { color: #9d174d; border-color: #f0abfc; }
+.cb-team-msg {
+  font-size: 16px;
+  font-weight: 700;
+  color: #6d28d9;
+}
+
+.cb-footer {
+  margin-top: 22px;
+  text-align: center;
+  font-size: 13px;
   font-weight: 600;
   color: #94a3b8;
 }
@@ -1060,12 +1225,15 @@ footer {
     max-width: 100%;
   }
   .board-toolbar { display: none; }
-  #board-content { padding: 16px; background: #fff !important; }
+  #board-content { padding: 16px; }
   body > *:not(#board-overlay) { display: none !important; }
   .board-overlay.hidden { display: block !important; }
   .cb-month { page-break-inside: avoid; }
   .cb-cell { min-height: 88px; box-shadow: none; }
-  .cb-act, .cb-month-title, .cb-legend-item {
+  .cb-cell.today { animation: none !important; }
+  #board-content,
+  .cb-hero, .cb-act, .cb-cell, .cb-month-title, .cb-legend-item,
+  .cb-countdown, .cb-team-footer, .cb-team-chip, .cb-badge {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
