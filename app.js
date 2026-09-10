@@ -5,7 +5,7 @@
 const STORAGE_KEY = 'woodcraftSite_state_v1';
 const CLOUD_CFG_KEY = 'woodcraftSite_cloudConfig_v1';
 const SESSION_ADMIN_KEY = 'woodcraftSite_adminSession_v1';
-const DEFAULT_ADMIN_PASSWORD = 'wood2026';
+const DEFAULT_ADMIN_PASSWORD = '6767';
 const LEADS_LOCAL_CAP = 300;
 
 const DEFAULT_STATE = {
@@ -158,8 +158,9 @@ function renderGallery() {
   state.gallery.forEach(item => {
     const card = document.createElement('div');
     card.className = 'gallery-card';
+    const posX = item.posX ?? 50, posY = item.posY ?? 50, zoom = item.zoom ?? 100;
     const media = item.img
-      ? `<img class="gallery-photo" src="${item.img}" alt="${escapeHtml(item.caption || '')}">`
+      ? `<div class="gallery-photo-frame"><img class="gallery-photo" src="${item.img}" alt="${escapeHtml(item.caption || '')}" style="object-position:${posX}% ${posY}%; transform:scale(${zoom / 100});"></div>`
       : `<div class="gallery-photo-placeholder">${escapeHtml(item.caption || 'תמונה לדוגמה')}</div>`;
     card.innerHTML = `<figure>${media}${item.caption ? `<figcaption class="gallery-caption">${escapeHtml(item.caption)}</figcaption>` : ''}</figure>`;
     grid.appendChild(card);
@@ -280,8 +281,33 @@ document.getElementById('admin-login-form').addEventListener('submit', async e =
     showAdminShell();
   } else {
     err.hidden = false;
+    document.getElementById('admin-password-input').value = '';
   }
 });
+
+const pinInput = document.getElementById('admin-password-input');
+pinInput.addEventListener('input', () => {
+  pinInput.value = pinInput.value.replace(/\D/g, '').slice(0, 4);
+  if (pinInput.value.length === 4) {
+    document.getElementById('admin-login-form').requestSubmit();
+  }
+});
+
+// ---- Secret gesture: 5 clicks on the logo within 1.5s opens the admin gate ----
+let logoClickCount = 0;
+let logoClickTimer = null;
+function handleLogoSecretClick(e) {
+  logoClickCount += 1;
+  clearTimeout(logoClickTimer);
+  logoClickTimer = setTimeout(() => { logoClickCount = 0; }, 1500);
+  if (logoClickCount >= 5) {
+    e.preventDefault();
+    logoClickCount = 0;
+    location.hash = '#admin';
+  }
+}
+document.getElementById('brand-logo').addEventListener('click', handleLogoSecretClick);
+document.getElementById('brand-logo-fallback').addEventListener('click', handleLogoSecretClick);
 
 document.querySelectorAll('.admin-nav-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -418,14 +444,31 @@ function renderAdminGalleryList() {
   state.gallery.forEach((item, idx) => {
     const li = document.createElement('li');
     const media = item.img ? `<img src="${item.img}" alt="">` : `<div class="gallery-photo-placeholder" style="width:90px;height:68px;font-size:.6rem;padding:.3rem;">ללא תמונה</div>`;
+    const posX = item.posX ?? 50, posY = item.posY ?? 50, zoom = item.zoom ?? 100;
+    const adjustRow = item.img ? `
+      <div class="gallery-adjust">
+        <label>מיקום אופקי
+          <input type="range" min="0" max="100" value="${posX}" data-role="posX">
+        </label>
+        <label>מיקום אנכי
+          <input type="range" min="0" max="100" value="${posY}" data-role="posY">
+        </label>
+        <label>זום
+          <input type="range" min="100" max="200" value="${zoom}" data-role="zoom">
+        </label>
+        <button type="button" class="btn btn-ghost btn-sm" data-role="reset-view">איפוס תצוגה</button>
+      </div>` : '';
     li.innerHTML = `
-      ${media}
-      <input type="text" value="${escapeHtml(item.caption || '')}" placeholder="כיתוב לתמונה" data-role="caption">
-      <div class="row-actions">
-        <button type="button" data-role="up" title="הזזה למעלה" ${idx === 0 ? 'disabled' : ''}>↑</button>
-        <button type="button" data-role="down" title="הזזה למטה" ${idx === state.gallery.length - 1 ? 'disabled' : ''}>↓</button>
-        <button type="button" data-role="delete" class="danger" title="מחיקה">✕</button>
-      </div>`;
+      <div class="admin-gallery-row-top">
+        ${media}
+        <input type="text" value="${escapeHtml(item.caption || '')}" placeholder="כיתוב לתמונה" data-role="caption">
+        <div class="row-actions">
+          <button type="button" data-role="up" title="הזזה למעלה" ${idx === 0 ? 'disabled' : ''}>↑</button>
+          <button type="button" data-role="down" title="הזזה למטה" ${idx === state.gallery.length - 1 ? 'disabled' : ''}>↓</button>
+          <button type="button" data-role="delete" class="danger" title="מחיקה">✕</button>
+        </div>
+      </div>
+      ${adjustRow}`;
     li.querySelector('[data-role="caption"]').addEventListener('input', e => {
       item.caption = e.target.value; saveState(); renderGallery(); cloudWriteGalleryItem(item);
     });
@@ -443,6 +486,29 @@ function renderAdminGalleryList() {
       [state.gallery[idx + 1], state.gallery[idx]] = [state.gallery[idx], state.gallery[idx + 1]];
       saveState(); renderAdminGalleryList(); renderGallery(); cloudWriteGalleryOrder();
     });
+
+    if (item.img) {
+      const posXInput = li.querySelector('[data-role="posX"]');
+      const posYInput = li.querySelector('[data-role="posY"]');
+      const zoomInput = li.querySelector('[data-role="zoom"]');
+      const applyLive = () => {
+        item.posX = Number(posXInput.value);
+        item.posY = Number(posYInput.value);
+        item.zoom = Number(zoomInput.value);
+        renderGallery();
+      };
+      const commitView = () => { saveState(); cloudWriteGalleryItem(item); };
+      [posXInput, posYInput, zoomInput].forEach(input => {
+        input.addEventListener('input', applyLive);
+        input.addEventListener('change', commitView);
+      });
+      li.querySelector('[data-role="reset-view"]').addEventListener('click', () => {
+        item.posX = 50; item.posY = 50; item.zoom = 100;
+        posXInput.value = 50; posYInput.value = 50; zoomInput.value = 100;
+        renderGallery(); commitView();
+      });
+    }
+
     list.appendChild(li);
   });
 }
@@ -451,7 +517,7 @@ document.getElementById('gallery-upload').addEventListener('change', async e => 
   const file = e.target.files[0];
   if (!file) return;
   const dataUrl = await compressImage(file, 1100, 0.72);
-  const item = { id: uid('g'), img: dataUrl, caption: '' };
+  const item = { id: uid('g'), img: dataUrl, caption: '', posX: 50, posY: 50, zoom: 100 };
   state.gallery.push(item);
   saveState();
   renderAdminGalleryList();
@@ -504,7 +570,7 @@ document.getElementById('password-form').addEventListener('submit', async e => {
   const err = document.getElementById('password-error');
   const hash = await sha256(current);
   if (hash !== state.adminPasswordHash) {
-    err.textContent = 'הסיסמה הנוכחית שגויה.'; err.hidden = false; return;
+    err.textContent = 'הקוד הנוכחי שגוי.'; err.hidden = false; return;
   }
   state.adminPasswordHash = await sha256(next);
   saveState();
@@ -542,9 +608,9 @@ async function connectCloud(cfg) {
   const siteRef = doc(db, 'content', 'site');
   const siteSnap = await getDoc(siteRef);
   if (siteSnap.exists()) {
-    Object.assign(state.site, siteSnap.data());
+    applySiteDocData(siteSnap.data());
   } else {
-    await setDoc(siteRef, state.site);
+    await setDoc(siteRef, siteDocPayload());
   }
 
   const pricesCol = collection(db, 'prices');
@@ -568,7 +634,7 @@ async function connectCloud(cfg) {
   cloud.unsubs.push(onSnapshot(siteRef, snap => {
     if (!snap.exists()) return;
     cloud.applyingRemote = true;
-    Object.assign(state.site, snap.data());
+    applySiteDocData(snap.data());
     saveState(); renderSite(); renderAdminAll();
     cloud.applyingRemote = false;
   }));
@@ -599,10 +665,18 @@ function disconnectCloud() {
   renderCloudPanel();
 }
 
+function siteDocPayload() {
+  return { ...state.site, adminPasswordHash: state.adminPasswordHash };
+}
+function applySiteDocData(data) {
+  const { adminPasswordHash, ...siteFields } = data;
+  Object.assign(state.site, siteFields);
+  if (adminPasswordHash) state.adminPasswordHash = adminPasswordHash;
+}
 function cloudWriteSite() {
   if (!cloud.active || cloud.applyingRemote) return;
   const { doc, setDoc } = cloud.fns;
-  setDoc(doc(cloud.db, 'content', 'site'), state.site).catch(e => console.error('cloudWriteSite', e));
+  setDoc(doc(cloud.db, 'content', 'site'), siteDocPayload()).catch(e => console.error('cloudWriteSite', e));
 }
 function cloudWritePriceItem(item) {
   if (!cloud.active) return;

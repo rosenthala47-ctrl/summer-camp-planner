@@ -156,12 +156,10 @@
 <div class="admin-gate" id="admin-gate" hidden>
   <div class="admin-gate-box">
     <p class="eyebrow">אזור ניהול</p>
-    <h2>כניסה ללוח הניהול</h2>
+    <h2>הזינו קוד ניהול</h2>
     <form id="admin-login-form">
-      <label>סיסמה
-        <input type="password" id="admin-password-input" autocomplete="current-password" required>
-      </label>
-      <p class="field-error" id="admin-login-error" hidden>סיסמה שגויה, נסו שוב.</p>
+      <input type="tel" id="admin-password-input" class="pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••" required>
+      <p class="field-error" id="admin-login-error" hidden>קוד שגוי, נסו שוב.</p>
       <div class="admin-gate-actions">
         <button type="submit" class="btn btn-cta">כניסה</button>
         <a href="#top" class="btn btn-ghost">חזרה לאתר</a>
@@ -297,16 +295,17 @@
         <button type="button" class="btn btn-ghost" id="btn-disconnect-cloud">ניתוק מהסנכרון</button>
       </div>
 
-      <h2>שינוי סיסמת ניהול</h2>
+      <h2>שינוי קוד ניהול</h2>
+      <p class="hint">הכניסה ללוח הניהול היא באמצעות 5 לחיצות רצופות על הלוגו באתר, ואז הקוד הבא.</p>
       <form id="password-form" class="admin-form">
-        <label>סיסמה נוכחית
-          <input type="password" id="f-current-password" required autocomplete="current-password">
+        <label>קוד נוכחי
+          <input type="tel" id="f-current-password" class="pin-input-inline" inputmode="numeric" pattern="[0-9]*" maxlength="4" required autocomplete="off">
         </label>
-        <label>סיסמה חדשה
-          <input type="password" id="f-new-password" required autocomplete="new-password" minlength="4">
+        <label>קוד חדש (4 ספרות)
+          <input type="tel" id="f-new-password" class="pin-input-inline" inputmode="numeric" pattern="[0-9]*" maxlength="4" minlength="4" required autocomplete="off">
         </label>
         <p class="field-error" id="password-error" hidden></p>
-        <button type="submit" class="btn btn-cta">עדכון סיסמה</button>
+        <button type="submit" class="btn btn-cta">עדכון קוד</button>
         <span class="save-confirm" id="password-save-confirm" hidden>✓ עודכן</span>
       </form>
     </section>
