@@ -1,5 +1,5 @@
 // ============================================================
-// יד ועץ — Woodcraft & Judaica business site + admin dashboard
+// ג'פטו אומנות בעץ — Woodcraft & Judaica business site + admin dashboard
 // ============================================================
 
 const STORAGE_KEY = 'woodcraftSite_state_v1';
@@ -10,28 +10,27 @@ const LEADS_LOCAL_CAP = 300;
 
 const DEFAULT_STATE = {
   site: {
-    businessName: 'יד ועץ',
-    tagline: 'מזוזות, תבליטים ומתנות עץ — כל יצירה מתחילה בגזע אחד, ומסתיימת בפריט שילווה את הבית שלכם לדורות.',
-    about: 'כל יצירה מתחילה בגזע עץ אחד ומסתיימת בפריט שילווה את הבית שלכם לדורות. במשך שנים אני מעצב ומגלף מזוזות, תבליטים ומזכרות בעבודת יד — ממבחר עצי זית, אלון ואגוז. כל חתיכה שונה, וכל מזוזה מקבלת את הגימור המתאים לה.',
+    businessName: 'ג\'פטו אומנות בעץ',
+    tagline: 'מזוזות ייחודיות משילוב עץ זית ואפוקסי — כל יצירה היא גזע אחר, סיפור אחר, מזוזה אחת בלבד בעולם.',
+    about: 'כמו ג\'פטו שנפח חיים בכל חתיכת עץ, כל מזוזה כאן נולדת משילוב של עץ זית טבעי ואפוקסי צבעוני, כך שכל פריט הוא יצירה יחידה שלא תיוצר פעם נוספת. בין הדגמים אפשר למצוא עיצובים בהשראת מפת ארץ ישראל, גימורי פנינה ותכלת, ועיטורי שם קדוש בציפוי זהב או כסף. כל מזוזה נבנית ונגמרת ביד, מהבחירה של פלח העץ ועד הליטוש האחרון.',
     phone: '',
     address: '',
     hours: '',
     instagram: '',
-    logo: '',
+    logo: 'images/logo.png',
     leadsTotal: 0,
   },
   gallery: [
-    { id: 'g1', img: '', caption: 'מזוזת עץ זית מגולפת ביד — תמונה לדוגמה, החליפו בעבודה שלכם' },
-    { id: 'g2', img: '', caption: 'תבליט קיר בעיצוב אישי — תמונה לדוגמה' },
-    { id: 'g3', img: '', caption: 'סדרת מזוזות מעץ אגוז — תמונה לדוגמה' },
-    { id: 'g4', img: '', caption: 'אריזת מתנה מוקפדת להזמנה — תמונה לדוגמה' },
+    { id: 'g1', img: 'images/gallery-1.jpg', caption: 'מזוזות זית ואפוקסי בגוון תכלת — כל גזע עץ יוצר תבנית שונה' },
+    { id: 'g2', img: 'images/gallery-2.jpg', caption: 'גימור פנינה לבן, מוכן לאריזת מתנה מהודרת' },
+    { id: 'g3', img: 'images/gallery-3.jpg', caption: 'סדרת מזוזות בעיצוב מפת ארץ ישראל' },
   ],
   prices: [
-    { id: 'p1', name: 'מזוזה בעיצוב אישי מעץ זית', price: 180, unit: 'ומעלה', note: 'כולל חריטת שם או ברכה' },
-    { id: 'p2', name: 'מזוזה קלאסית מעץ אלון', price: 120, unit: '', note: '' },
-    { id: 'p3', name: 'תבליט קיר בהתאמה אישית', price: 250, unit: 'ומעלה', note: 'מידות וטקסט לבחירה' },
-    { id: 'p4', name: 'מארז מתנה למזוזה + ברכה', price: 220, unit: '', note: 'אריזה מהודרת, מוכנה למתנה' },
-    { id: 'p5', name: 'סדנת גילוף למתחילים', price: 150, unit: 'לאדם', note: '2 שעות, כולל חומרים' },
+    { id: 'p1', name: 'מזוזה מעץ זית ואפוקסי בעיצוב אישי', price: 220, unit: 'ומעלה', note: 'בחירת גוון אפוקסי וגזע עץ' },
+    { id: 'p2', name: 'מזוזה בעיצוב מפת ארץ ישראל', price: 280, unit: 'ומעלה', note: '' },
+    { id: 'p3', name: 'מזוזה בגימור פנינה עם עיטור זהב/כסף', price: 250, unit: '', note: '' },
+    { id: 'p4', name: 'מארז מתנה למזוזה + ברכה', price: 180, unit: '', note: 'אריזה מהודרת, מוכנה למתנה' },
+    { id: 'p5', name: 'סדנת יצירה בשילוב עץ ואפוקסי', price: 180, unit: 'לאדם', note: '2 שעות, כולל חומרים' },
   ],
   leads: [],
   adminPasswordHash: '',
@@ -104,7 +103,7 @@ function formatPrice(n) {
 // ---------------- Rendering: public site ----------------
 function renderSite() {
   const s = state.site;
-  document.getElementById('page-title').textContent = `${s.businessName} | אמנות עץ ומזוזות בעבודת יד`;
+  document.getElementById('page-title').textContent = `${s.businessName} | מזוזות עץ זית ואפוקסי בעבודת יד`;
   document.getElementById('meta-description').setAttribute('content', s.tagline);
   document.getElementById('og-title').setAttribute('content', s.businessName);
   document.getElementById('og-description').setAttribute('content', s.tagline);
