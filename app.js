@@ -1,58 +1,56 @@
 // ============================================================
-// מתכנן חופש גדול — Summer Camp Planner
+// ג'פטו אומנות בעץ — Woodcraft & Judaica business site + admin dashboard
 // ============================================================
 
-const CAMP_START = '2026-06-18';
-const CAMP_END = '2026-08-26';
-const STORAGE_KEY = 'summerCampPlanner_v1';
-
-// One-time reset of every counselor's unavailability dates. Bump this token to
-// trigger the reset again. It runs once per device (localStorage) and once for
-// the whole shared group (Firestore meta doc), gated by the same token.
-const RESET_TOKEN = 'vacations-reset-2026-05';
-const LOCAL_RESET_KEY = 'summerCampPlanner_resetToken_v1';
-
-// One-time targeted password clears, applied once per shared group via a
-// Firestore meta token. Any counselor whose name matches one in
-// PASSWORD_RESET_NAMES has their passwordHash wiped so they can set a fresh
-// password. Bump the token to trigger again.
-const PASSWORD_RESET_TOKEN = 'pw-reset-2026-05-a';
-const PASSWORD_RESET_NAMES = ['גפן'];
-
-const HEBREW_MONTHS = {
-  6: 'יוני 2026',
-  7: 'יולי 2026',
-  8: 'אוגוסט 2026',
-};
-
-const HEBREW_DAYS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+const STORAGE_KEY = 'woodcraftSite_state_v1';
+const CLOUD_CFG_KEY = 'woodcraftSite_cloudConfig_v1';
+const SESSION_ADMIN_KEY = 'woodcraftSite_adminSession_v1';
+const DEFAULT_ADMIN_PASSWORD = 'wood2026';
+const LEADS_LOCAL_CAP = 300;
 
 const DEFAULT_STATE = {
-  counselors: [
-    { id: 'c1', name: 'מדריך 1', gender: 'M', vacationDates: [], passwordHash: '' },
-    { id: 'c2', name: 'מדריך 2', gender: 'M', vacationDates: [], passwordHash: '' },
-    { id: 'c3', name: 'מדריכה 1', gender: 'F', vacationDates: [], passwordHash: '' },
-    { id: 'c4', name: 'מדריכה 2', gender: 'F', vacationDates: [], passwordHash: '' },
+  site: {
+    businessName: 'ג\'פטו אומנות בעץ',
+    tagline: 'מזוזות ייחודיות משילוב עץ זית ואפוקסי — כל יצירה היא גזע אחר, סיפור אחר, מזוזה אחת בלבד בעולם.',
+    about: 'כמו ג\'פטו שנפח חיים בכל חתיכת עץ, כל מזוזה כאן נולדת משילוב של עץ זית טבעי ואפוקסי צבעוני, כך שכל פריט הוא יצירה יחידה שלא תיוצר פעם נוספת. בין הדגמים אפשר למצוא עיצובים בהשראת מפת ארץ ישראל, גימורי פנינה ותכלת, ועיטורי שם קדוש בציפוי זהב או כסף. כל מזוזה נבנית ונגמרת ביד, מהבחירה של פלח העץ ועד הליטוש האחרון.',
+    phone: '0556850155',
+    address: '',
+    hours: '',
+    instagram: '',
+    logo: 'images/logo.png',
+    leadsTotal: 0,
+  },
+  gallery: [
+    { id: 'g1', img: 'images/gallery-1.jpg', caption: 'מזוזות זית ואפוקסי בגוון תכלת — כל גזע עץ יוצר תבנית שונה' },
+    { id: 'g2', img: 'images/gallery-2.jpg', caption: 'גימור פנינה לבן, מוכן לאריזת מתנה מהודרת' },
+    { id: 'g3', img: 'images/gallery-3.jpg', caption: 'סדרת מזוזות בעיצוב מפת ארץ ישראל' },
   ],
-  activities: [],
+  prices: [
+    { id: 'p1', name: 'מזוזה מעץ זית ואפוקסי בעיצוב אישי', price: 220, unit: 'ומעלה', note: 'בחירת גוון אפוקסי וגזע עץ' },
+    { id: 'p2', name: 'מזוזה בעיצוב מפת ארץ ישראל', price: 280, unit: 'ומעלה', note: '' },
+    { id: 'p3', name: 'מזוזה בגימור פנינה עם עיטור זהב/כסף', price: 250, unit: '', note: '' },
+    { id: 'p4', name: 'מארז מתנה למזוזה + ברכה', price: 180, unit: '', note: 'אריזה מהודרת, מוכנה למתנה' },
+    { id: 'p5', name: 'סדנת יצירה בשילוב עץ ואפוקסי', price: 180, unit: 'לאדם', note: '2 שעות, כולל חומרים' },
+  ],
+  leads: [],
+  adminPasswordHash: '',
 };
 
-// ---------------- State ----------------
 let state = loadState();
+let cloud = { active: false, db: null, fns: null, unsubs: [], applyingRemote: false };
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return structuredClone(DEFAULT_STATE);
     const parsed = JSON.parse(raw);
-    // Backfill missing fields
-    parsed.counselors = (parsed.counselors || DEFAULT_STATE.counselors).map(c => ({
-      passwordHash: '',
-      ...c,
-      vacationDates: Array.isArray(c.vacationDates) ? c.vacationDates : [],
-    }));
-    parsed.activities = parsed.activities || [];
-    return parsed;
+    return {
+      site: { ...DEFAULT_STATE.site, ...(parsed.site || {}) },
+      gallery: Array.isArray(parsed.gallery) ? parsed.gallery : structuredClone(DEFAULT_STATE.gallery),
+      prices: Array.isArray(parsed.prices) ? parsed.prices : structuredClone(DEFAULT_STATE.prices),
+      leads: Array.isArray(parsed.leads) ? parsed.leads : [],
+      adminPasswordHash: parsed.adminPasswordHash || '',
+    };
   } catch (e) {
     console.warn('Failed to load state, using defaults', e);
     return structuredClone(DEFAULT_STATE);
@@ -60,1700 +58,633 @@ function loadState() {
 }
 
 function saveState() {
-  // Persist to localStorage only. Cloud sync is now per-entity (granular)
-  // and is triggered explicitly by each mutation path.
-  state.lastUpdate = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-// Clears every counselor's unavailability dates once per device. The shared
-// cloud copy is reset separately inside initCloud(), gated by the same token.
-function applyLocalVacationReset() {
-  if (localStorage.getItem(LOCAL_RESET_KEY) === RESET_TOKEN) return;
-  let changed = false;
-  state.counselors.forEach(c => {
-    if (Array.isArray(c.vacationDates) && c.vacationDates.length) changed = true;
-    c.vacationDates = [];
-  });
-  localStorage.setItem(LOCAL_RESET_KEY, RESET_TOKEN);
-  if (changed) saveState();
-}
-
-// ---------------- Per-counselor password / auth ----------------
-// The counselor whose dates are currently unlocked for editing. Kept in memory
-// only — a page reload requires logging in again.
-let currentCoachId = null;
-
-async function hashPassword(pw) {
-  const data = new TextEncoder().encode(String(pw));
-  const buf = await crypto.subtle.digest('SHA-256', data);
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-function coachHasPassword(c) {
-  return !!(c && c.passwordHash);
-}
-
-async function verifyCoachPassword(coachId, plainPw) {
-  const c = state.counselors.find(x => x.id === coachId);
-  if (!c || !c.passwordHash) return false;
-  return (await hashPassword(plainPw)) === c.passwordHash;
-}
-
-async function promptSetPassword(coachId, isChange) {
-  const c = state.counselors.find(x => x.id === coachId);
-  if (!c) return;
-  if (isChange) {
-    const current = prompt(`הזן/י את הסיסמה הנוכחית של ${c.name}:`);
-    if (current === null) return;
-    if (!(await verifyCoachPassword(coachId, current))) {
-      alert('❌ סיסמה נוכחית שגויה.');
-      return;
-    }
-  }
-  const pw = prompt(
-    `בחר/י סיסמה חדשה ל${c.name}.\n\n` +
-    `⚠️ חשוב מאוד לזכור את הסיסמה!\n` +
-    `אין דרך לאפס סיסמה שנשכחה — מי ששוכח את הסיסמה לא יוכל יותר לערוך את הימים שלו באתר.\n\n` +
-    `(לפחות 3 תווים)`
-  );
-  if (pw === null) return;
-  if (pw.trim().length < 3) {
-    alert('הסיסמה צריכה להיות לפחות 3 תווים.');
-    return;
-  }
-  const confirmPw = prompt('הקלד/י שוב את הסיסמה לאישור (וודא/י שאת/ה זוכר/ת אותה — אין איפוס):');
-  if (confirmPw === null) return;
-  if (pw !== confirmPw) {
-    alert('הסיסמאות לא תואמות. נסה/י שוב.');
-    return;
-  }
-  c.passwordHash = await hashPassword(pw);
-  saveState();
-  cloudWriteCounselor(c);
-  renderCounselors();
-  alert(`✅ הסיסמה של ${c.name} נשמרה.\n\n⚠️ זכור/י את הסיסמה — אין דרך לאפס אותה!`);
-}
-
-// ---------------- Date helpers ----------------
-function parseISO(s) {
-  const [y, m, d] = s.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function toISO(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function addDays(iso, n) {
-  const d = parseISO(iso);
-  d.setDate(d.getDate() + n);
-  return toISO(d);
-}
-
-function formatHebrewDate(iso) {
-  const d = parseISO(iso);
-  return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`;
-}
-
-function rangeISO(startISO, days) {
-  const out = [];
-  for (let i = 0; i < days; i++) out.push(addDays(startISO, i));
-  return out;
-}
-
-function isInCamp(iso) {
-  return iso >= CAMP_START && iso <= CAMP_END;
-}
-
-// ---------------- Conflict logic ----------------
-// Returns array of conflict messages for given activity (no message → no conflict).
-function detectConflicts(activity) {
-  const days = rangeISO(activity.startDate, activity.days);
-  const issues = [];
-
-  // Check camp window
-  const outOfRange = days.filter(d => !isInCamp(d));
-  if (outOfRange.length) {
-    issues.push(`התאריכים ${outOfRange.map(formatHebrewDate).join(', ')} מחוץ לטווח החופש הגדול`);
-  }
-
-  // Required counselors per activity type
-  const required = requiredCounselorsForType(activity.type);
-  // required is an array of counselor IDs that MUST be available
-  for (const day of days) {
-    if (!isInCamp(day)) continue;
-    for (const c of state.counselors) {
-      if (!required.has(c.id)) continue;
-      if (c.vacationDates.includes(day)) {
-        issues.push(`${c.name} בחופש ב-${formatHebrewDate(day)}`);
-      }
-    }
-  }
-  return issues;
-}
-
-function requiredCounselorsForType(type) {
-  // Returns Set of counselor IDs required for activity type.
-  const males = state.counselors.filter(c => c.gender === 'M').map(c => c.id);
-  const females = state.counselors.filter(c => c.gender === 'F').map(c => c.id);
-  switch (type) {
-    case 'all':
-    case 'split':
-      return new Set(state.counselors.map(c => c.id));
-    case 'boys':
-      return new Set(males);
-    case 'girls':
-      return new Set(females);
-    default:
-      return new Set();
+async function ensureDefaultPassword() {
+  if (!state.adminPasswordHash) {
+    state.adminPasswordHash = await sha256(DEFAULT_ADMIN_PASSWORD);
+    saveState();
   }
 }
 
-function findFreeRange(days, type) {
-  // Try each possible start date in camp range; return first free one.
-  const required = requiredCounselorsForType(type);
-  const start = parseISO(CAMP_START);
-  const end = parseISO(CAMP_END);
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const candidate = toISO(d);
-    const range = rangeISO(candidate, days);
-    if (!range.every(isInCamp)) break;
-    const occupied = range.some(day =>
-      state.counselors.some(c =>
-        required.has(c.id) && c.vacationDates.includes(day)
-      )
-    );
-    if (!occupied) return candidate;
-  }
-  return null;
+function uid(prefix) {
+  return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-// ---------------- Tabs ----------------
-document.querySelectorAll('.tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-    if (btn.dataset.tab === 'vacations') renderVacationCalendar();
-    if (btn.dataset.tab === 'calendar') renderSummerCalendar();
-    if (btn.dataset.tab === 'activities') renderActivities();
+// ---------------- WhatsApp helpers ----------------
+function normalizedPhoneDigits(raw) {
+  let digits = (raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('972')) return digits;
+  if (digits.startsWith('0')) return '972' + digits.slice(1);
+  return digits;
+}
+
+function buildWhatsAppUrl(message) {
+  const digits = normalizedPhoneDigits(state.site.phone);
+  if (!digits) return null;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+}
+
+function defaultWaMessage() {
+  return `שלום! ראיתי את האתר של ${state.site.businessName} ואשמח לשמוע פרטים על הזמנת יצירה בעץ.`;
+}
+
+function formatPrice(n) {
+  return '₪' + Number(n).toLocaleString('he-IL');
+}
+
+// ---------------- Rendering: public site ----------------
+function renderSite() {
+  const s = state.site;
+  document.getElementById('page-title').textContent = `${s.businessName} | מזוזות עץ זית ואפוקסי בעבודת יד`;
+  document.getElementById('meta-description').setAttribute('content', s.tagline);
+  document.getElementById('og-title').setAttribute('content', s.businessName);
+  document.getElementById('og-description').setAttribute('content', s.tagline);
+  document.getElementById('brand-name-header').textContent = s.businessName;
+  document.getElementById('hero-name').textContent = s.businessName;
+  document.getElementById('hero-tagline').textContent = s.tagline;
+  document.getElementById('about-text').textContent = s.about;
+  document.getElementById('footer-name').textContent = '© ' + new Date().getFullYear() + ' ' + s.businessName;
+
+  const ld = document.getElementById('ld-json');
+  try {
+    const data = JSON.parse(ld.textContent);
+    data.name = s.businessName;
+    data.description = s.tagline;
+    if (s.phone) data.telephone = '+' + normalizedPhoneDigits(s.phone);
+    if (s.address) data.address = s.address;
+    ld.textContent = JSON.stringify(data);
+  } catch (e) { /* ignore */ }
+
+  const logoImg = document.getElementById('brand-logo');
+  const logoFallback = document.getElementById('brand-logo-fallback');
+  if (s.logo) {
+    logoImg.src = s.logo; logoImg.hidden = false; logoFallback.hidden = true;
+  } else {
+    logoImg.hidden = true; logoFallback.hidden = false;
+    logoFallback.textContent = s.businessName.trim().slice(0, 2);
+  }
+
+  setRow('row-phone', 'contact-phone', s.phone, v => v);
+  setRow('row-address', 'contact-address', s.address, v => v);
+  setRow('row-hours', 'contact-hours', s.hours, v => v);
+  const igRow = document.getElementById('row-instagram');
+  const igLink = document.getElementById('contact-instagram');
+  if (s.instagram) {
+    igRow.hidden = false; igLink.href = s.instagram; igLink.textContent = 'עקבו אחרינו באינסטגרם';
+  } else { igRow.hidden = true; }
+
+  renderGallery();
+  renderPrices();
+  updateLeadButtonsState();
+}
+
+function setRow(rowId, spanId, value, fmt) {
+  const row = document.getElementById(rowId);
+  if (value) { row.hidden = false; document.getElementById(spanId).textContent = fmt(value); }
+  else { row.hidden = true; }
+}
+
+function renderGallery() {
+  const grid = document.getElementById('gallery-grid');
+  grid.innerHTML = '';
+  state.gallery.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'gallery-card';
+    const media = item.img
+      ? `<img class="gallery-photo" src="${item.img}" alt="${escapeHtml(item.caption || '')}">`
+      : `<div class="gallery-photo-placeholder">${escapeHtml(item.caption || 'תמונה לדוגמה')}</div>`;
+    card.innerHTML = `<figure>${media}${item.caption ? `<figcaption class="gallery-caption">${escapeHtml(item.caption)}</figcaption>` : ''}</figure>`;
+    grid.appendChild(card);
   });
-});
+}
 
-// ---------------- Counselors tab ----------------
-function renderCounselors() {
-  const list = document.getElementById('counselors-list');
+function renderPrices() {
+  const list = document.getElementById('price-list');
   list.innerHTML = '';
-  state.counselors.forEach((c, idx) => {
-    const row = document.createElement('div');
-    row.className = `counselor-row ${c.gender === 'M' ? 'male' : 'female'}`;
-    const hasPw = coachHasPassword(c);
-    row.innerHTML = `
-      <div class="badge">${c.gender === 'M' ? '👦 מדריך' : '👧 מדריכה'}</div>
-      <label>שם:
-        <input type="text" data-idx="${idx}" data-field="name" value="${escapeHTML(c.name)}">
-      </label>
-      <label>מגדר:
-        <select data-idx="${idx}" data-field="gender">
-          <option value="M" ${c.gender === 'M' ? 'selected' : ''}>זכר</option>
-          <option value="F" ${c.gender === 'F' ? 'selected' : ''}>נקבה</option>
-        </select>
-      </label>
-      <div class="counselor-pw">
-        ${hasPw
-          ? `<span class="pw-status locked">🔒 מוגן בסיסמה</span>
-             <button type="button" class="pw-btn pw-change" data-id="${c.id}">שנה סיסמה</button>`
-          : `<span class="pw-status unlocked">🔓 ללא סיסמה</span>
-             <button type="button" class="pw-btn pw-set" data-id="${c.id}">🔑 הגדר סיסמה</button>`}
-      </div>
-    `;
-    list.appendChild(row);
+  state.prices.forEach(p => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <span class="price-item-name">${escapeHtml(p.name)}${p.note ? `<span class="price-item-note">${escapeHtml(p.note)}</span>` : ''}</span>
+      <span class="price-leader"></span>
+      <span class="price-item-value">${formatPrice(p.price)}${p.unit ? ' ' + escapeHtml(p.unit) : ''}</span>`;
+    list.appendChild(li);
   });
+}
 
-  list.querySelectorAll('input[data-field], select[data-field]').forEach(el => {
-    el.addEventListener('change', e => {
-      const idx = +e.target.dataset.idx;
-      const field = e.target.dataset.field;
-      state.counselors[idx][field] = e.target.value;
-      saveState();
-      cloudWriteCounselor(state.counselors[idx]);
-      renderCounselors();
-      populateCounselorSelect();
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function updateLeadButtonsState() {
+  const hasPhone = !!normalizedPhoneDigits(state.site.phone);
+  document.querySelectorAll('[data-lead-place]').forEach(el => {
+    el.classList.toggle('is-unconfigured', !hasPhone);
+  });
+}
+
+// ---------------- Lead tracking ----------------
+function showToast(msg, ms = 3200) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => { t.hidden = true; }, ms);
+}
+
+function logLead(place) {
+  const entry = { id: uid('lead'), ts: Date.now(), place };
+  state.leads.unshift(entry);
+  if (state.leads.length > LEADS_LOCAL_CAP) state.leads.length = LEADS_LOCAL_CAP;
+  state.site.leadsTotal = (state.site.leadsTotal || 0) + 1;
+  saveState();
+  cloudLogLead(entry);
+  renderAdminOverview();
+}
+
+function wireLeadButtons() {
+  document.querySelectorAll('[data-lead-place]').forEach(el => {
+    el.addEventListener('click', e => {
+      const digits = normalizedPhoneDigits(state.site.phone);
+      if (!digits) {
+        e.preventDefault();
+        showToast('מספר הוואטסאפ עדיין לא הוגדר. יש להגדיר אותו בלוח הניהול (הגדרות → פרטי התקשרות).');
+        return;
+      }
+      const place = el.getAttribute('data-lead-place');
+      const url = buildWhatsAppUrl(defaultWaMessage());
+      logLead(place);
+      window.open(url, '_blank', 'noopener');
     });
   });
-
-  list.querySelectorAll('.pw-set').forEach(btn =>
-    btn.addEventListener('click', () => promptSetPassword(btn.dataset.id, false)));
-  list.querySelectorAll('.pw-change').forEach(btn =>
-    btn.addEventListener('click', () => promptSetPassword(btn.dataset.id, true)));
 }
 
-function escapeHTML(s) {
-  return String(s).replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[c]));
+// ============================================================
+// ADMIN
+// ============================================================
+function isAdminLoggedIn() {
+  return sessionStorage.getItem(SESSION_ADMIN_KEY) === '1';
 }
 
-// ---------------- Vacations tab ----------------
-function populateCounselorSelect() {
-  const sel = document.getElementById('vacation-counselor-select');
-  const prev = sel.value;
-  sel.innerHTML = state.counselors
-    .map(c => `<option value="${c.id}">${escapeHTML(c.name)} (${c.gender === 'M' ? 'מדריך' : 'מדריכה'})</option>`)
-    .join('');
-  if (prev && state.counselors.find(c => c.id === prev)) sel.value = prev;
+function setPublicSiteVisible(visible) {
+  document.getElementById('site-header').hidden = !visible;
+  document.getElementById('top').hidden = !visible;
+  document.querySelector('.site-footer').hidden = !visible;
+  document.getElementById('fab-wa').hidden = !visible;
 }
 
-// Switching the selected counselor re-locks: you must re-enter the password.
-document.getElementById('vacation-counselor-select').addEventListener('change', () => {
-  currentCoachId = null;
-  renderVacationCalendar();
-});
+function showAdminGate() {
+  setPublicSiteVisible(false);
+  document.getElementById('admin-gate').hidden = false;
+  document.getElementById('admin-shell').hidden = true;
+  document.getElementById('admin-password-input').focus();
+}
 
-function renderVacationCalendar() {
-  const authBox = document.getElementById('vacation-auth');
-  const container = document.getElementById('vacation-calendar');
-  const selectedId = document.getElementById('vacation-counselor-select').value;
-  const counselor = state.counselors.find(c => c.id === selectedId);
-  if (authBox) authBox.innerHTML = '';
-  container.innerHTML = '';
+function showAdminShell() {
+  setPublicSiteVisible(false);
+  document.getElementById('admin-gate').hidden = true;
+  document.getElementById('admin-shell').hidden = false;
+  renderAdminAll();
+}
 
-  if (!counselor) {
-    container.innerHTML = '<div class="empty-state">בחר מדריך</div>';
-    return;
+function hideAdmin() {
+  setPublicSiteVisible(true);
+  document.getElementById('admin-gate').hidden = true;
+  document.getElementById('admin-shell').hidden = true;
+}
+
+function handleRoute() {
+  const hash = location.hash;
+  if (hash === '#admin-gate' || hash === '#admin') {
+    if (isAdminLoggedIn()) showAdminShell(); else showAdminGate();
+  } else {
+    hideAdmin();
   }
-
-  // No password yet → editing is blocked until one is set in the Counselors tab.
-  if (!coachHasPassword(counselor)) {
-    if (authBox) authBox.innerHTML = `<div class="warning-box info">
-      🔑 ל${escapeHTML(counselor.name)} עדיין אין סיסמה. כדי להגן על הימים, עברו ללשונית
-      <b>👥 מדריכים</b> ולחצו "הגדר סיסמה". עד אז אי אפשר לערוך כאן.<br>
-      <b style="color:var(--danger)">⚠️ חשוב לזכור את הסיסמה — אין אפשרות לאפס אותה.</b>
-    </div>`;
-    renderVacationMonths(container, counselor, false);
-    return;
-  }
-
-  // Has a password but this session isn't authenticated for them → locked.
-  if (currentCoachId !== counselor.id) {
-    if (authBox) authBox.innerHTML = `<div class="vacation-login">
-      <div class="login-title">🔒 הימים של ${escapeHTML(counselor.name)} נעולים</div>
-      <p class="login-hint">${counselor.gender === 'M' ? 'הזן את הסיסמה שלך' : 'הזיני את הסיסמה שלך'} כדי לערוך.</p>
-      <div class="login-row">
-        <input type="password" id="vacation-pw-input" placeholder="סיסמה" autocomplete="off">
-        <button type="button" id="vacation-login-btn" class="primary">🔓 כניסה</button>
-      </div>
-      <div id="vacation-login-error" class="login-error" hidden></div>
-    </div>`;
-    renderVacationMonths(container, counselor, false);
-    wireVacationLogin(counselor);
-    return;
-  }
-
-  // Authenticated → welcome banner + editable calendar.
-  const greet = counselor.gender === 'M' ? 'ברוך הבא' : 'ברוכה הבאה';
-  const ask = counselor.gender === 'M' ? 'אילו שינויים תרצה לעשות היום?' : 'אילו שינויים תרצי לעשות היום?';
-  if (authBox) {
-    authBox.innerHTML = `<div class="vacation-welcome">
-      <div class="welcome-text">😊 ${greet} ${escapeHTML(counselor.name)}! ${ask}</div>
-      <button type="button" id="vacation-logout-btn" class="secondary">🔒 נעילה</button>
-    </div>`;
-    document.getElementById('vacation-logout-btn').addEventListener('click', () => {
-      currentCoachId = null;
-      renderVacationCalendar();
-    });
-  }
-  renderVacationMonths(container, counselor, true);
 }
 
-function wireVacationLogin(counselor) {
-  const input = document.getElementById('vacation-pw-input');
-  const btn = document.getElementById('vacation-login-btn');
-  const errEl = document.getElementById('vacation-login-error');
-  if (!input || !btn) return;
-  const submit = async () => {
-    if (await verifyCoachPassword(counselor.id, input.value)) {
-      currentCoachId = counselor.id;
-      renderVacationCalendar();
-    } else {
-      errEl.hidden = false;
-      errEl.textContent = '❌ סיסמה שגויה, נסו שוב.';
-      input.value = '';
-      input.focus();
-    }
-  };
-  btn.addEventListener('click', submit);
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
-  input.focus();
-}
-
-function renderVacationMonths(container, counselor, editable) {
-  const months = monthsBetween(CAMP_START, CAMP_END);
-  const onClick = editable ? (iso => {
-    if (!isInCamp(iso)) return;
-    const c = state.counselors.find(x => x.id === counselor.id);
-    if (!c) return;
-    const isVac = c.vacationDates.includes(iso);
-    if (isVac) {
-      // Removing a vacation date never creates new activity conflicts.
-      c.vacationDates = c.vacationDates.filter(d => d !== iso);
-      cloudRemoveVacation(c.id, iso);
-      saveState();
-      renderVacationCalendar();
-    } else {
-      // Adding a vacation date may collide with existing activities.
-      const conflicts = checkVacationToggleConflicts(c.id, iso);
-      if (conflicts.length === 0) {
-        c.vacationDates.push(iso);
-        c.vacationDates.sort();
-        cloudAddVacation(c.id, iso);
-        saveState();
-        renderVacationCalendar();
-      } else {
-        showVacationConflictModal(c, iso, conflicts);
-      }
-    }
-  }) : null;
-  const decorate = iso => counselor.vacationDates.includes(iso)
-    ? { className: editable ? 'unavailable' : 'unavailable locked' }
-    : null;
-  months.forEach(({ year, month }) => {
-    container.appendChild(buildMonth(year, month, onClick, decorate));
-  });
-}
-
-function monthsBetween(startISO, endISO) {
-  const s = parseISO(startISO);
-  const e = parseISO(endISO);
-  const out = [];
-  let y = s.getFullYear();
-  let m = s.getMonth();
-  while (y < e.getFullYear() || (y === e.getFullYear() && m <= e.getMonth())) {
-    out.push({ year: y, month: m + 1 });
-    m++;
-    if (m > 11) { m = 0; y++; }
-  }
-  return out;
-}
-
-function buildMonth(year, month, onClick, decorate) {
-  const wrap = document.createElement('div');
-  wrap.className = 'month';
-  const header = document.createElement('div');
-  header.className = 'month-header';
-  header.textContent = HEBREW_MONTHS[month] || `${month}/${year}`;
-  wrap.appendChild(header);
-
-  const weekdays = document.createElement('div');
-  weekdays.className = 'weekdays';
-  HEBREW_DAYS.forEach(d => {
-    const w = document.createElement('div');
-    w.textContent = d;
-    weekdays.appendChild(w);
-  });
-  wrap.appendChild(weekdays);
-
-  const days = document.createElement('div');
-  days.className = 'days';
-
-  const first = new Date(year, month - 1, 1);
-  const startWeekday = first.getDay(); // Sunday = 0
-  const daysInMonth = new Date(year, month, 0).getDate();
-
-  for (let i = 0; i < startWeekday; i++) {
-    const empty = document.createElement('div');
-    empty.className = 'day empty';
-    days.appendChild(empty);
-  }
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const iso = toISO(new Date(year, month - 1, d));
-    const cell = document.createElement('div');
-    cell.className = 'day';
-    if (!isInCamp(iso)) cell.classList.add('outside');
-
-    const num = document.createElement('div');
-    num.className = 'day-num';
-    num.textContent = d;
-    cell.appendChild(num);
-
-    if (decorate) {
-      const deco = decorate(iso);
-      if (deco) {
-        if (deco.className) cell.classList.add(...deco.className.split(' '));
-        if (deco.content) {
-          const c = document.createElement('div');
-          c.innerHTML = deco.content;
-          cell.appendChild(c);
-        }
-      }
-    }
-
-    if (isInCamp(iso) && onClick) {
-      cell.addEventListener('click', () => onClick(iso, cell));
-    }
-    days.appendChild(cell);
-  }
-
-  wrap.appendChild(days);
-  return wrap;
-}
-
-// ---------------- Activities tab ----------------
-const activityForm = document.getElementById('activity-form');
-
-activityForm.addEventListener('submit', e => {
+document.getElementById('admin-login-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const id = document.getElementById('activity-id').value;
-  const activity = {
-    id: id || 'a_' + Math.random().toString(36).slice(2, 9),
-    name: document.getElementById('activity-name').value.trim(),
-    startDate: document.getElementById('activity-date').value,
-    days: parseInt(document.getElementById('activity-days').value, 10),
-    type: document.getElementById('activity-type').value,
-    notes: document.getElementById('activity-notes').value.trim(),
-    showInCamperBoard: document.getElementById('activity-in-board').checked,
-  };
-
-  if (id) {
-    const idx = state.activities.findIndex(a => a.id === id);
-    state.activities[idx] = activity;
+  const pw = document.getElementById('admin-password-input').value;
+  const hash = await sha256(pw);
+  const err = document.getElementById('admin-login-error');
+  if (hash === state.adminPasswordHash) {
+    err.hidden = true;
+    sessionStorage.setItem(SESSION_ADMIN_KEY, '1');
+    document.getElementById('admin-password-input').value = '';
+    showAdminShell();
   } else {
-    state.activities.push(activity);
-  }
-  state.activities.sort((a, b) => a.startDate.localeCompare(b.startDate));
-  saveState();
-  cloudWriteActivity(activity);
-  resetActivityForm();
-  renderActivities();
-});
-
-document.getElementById('activity-cancel').addEventListener('click', resetActivityForm);
-
-document.getElementById('activity-suggest').addEventListener('click', () => {
-  const days = parseInt(document.getElementById('activity-days').value, 10) || 1;
-  const type = document.getElementById('activity-type').value;
-  const free = findFreeRange(days, type);
-  const warningEl = document.getElementById('activity-warning');
-  if (free) {
-    document.getElementById('activity-date').value = free;
-    warningEl.innerHTML = `<div class="warning-box info">💡 הצעה: התחל ב-${formatHebrewDate(free)} (${days} ${days === 1 ? 'יום' : 'ימים'})</div>`;
-  } else {
-    warningEl.innerHTML = `<div class="warning-box danger">לא נמצא חלון פנוי של ${days} ימים בקיץ עבור סוג הפעילות הזה.</div>`;
+    err.hidden = false;
   }
 });
 
-// live conflict feedback while typing
-['activity-date', 'activity-days', 'activity-type'].forEach(id => {
-  document.getElementById(id).addEventListener('input', updateLiveConflict);
+document.querySelectorAll('.admin-nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.admin-nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelector(`.admin-panel[data-panel="${btn.dataset.panel}"]`).classList.add('active');
+  });
 });
 
-function updateLiveConflict() {
-  const date = document.getElementById('activity-date').value;
-  const days = parseInt(document.getElementById('activity-days').value, 10);
-  const type = document.getElementById('activity-type').value;
-  const warningEl = document.getElementById('activity-warning');
-  if (!date || !days) { warningEl.innerHTML = ''; return; }
-  const issues = detectConflicts({ startDate: date, days, type });
-  if (issues.length === 0) {
-    warningEl.innerHTML = `<div class="warning-box success">✅ כל המדריכים הנדרשים פנויים בתאריכים האלה</div>`;
-  } else {
-    warningEl.innerHTML = `<div class="warning-box danger">⚠️ קונפליקטים:<ul>${issues.map(i => `<li>${escapeHTML(i)}</li>`).join('')}</ul></div>`;
-  }
+function renderAdminAll() {
+  document.getElementById('admin-brand-name').textContent = state.site.businessName;
+  renderAdminOverview();
+  renderAdminContentForm();
+  renderAdminGalleryList();
+  renderAdminPriceList();
+  renderCloudPanel();
 }
 
-function resetActivityForm() {
-  document.getElementById('activity-id').value = '';
-  activityForm.reset();
-  document.getElementById('activity-in-board').checked = true;
-  document.getElementById('activity-cancel').hidden = true;
-  document.getElementById('activity-warning').innerHTML = '';
-}
+function renderAdminOverview() {
+  const total = cloud.active ? (state.site.leadsTotal || 0) : state.leads.length;
+  document.getElementById('stat-leads-total').textContent = total;
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const weekCount = state.leads.filter(l => l.ts >= weekAgo).length;
+  document.getElementById('stat-leads-week').textContent = weekCount;
+  document.getElementById('stat-gallery-count').textContent = state.gallery.length;
+  document.getElementById('stat-prices-count').textContent = state.prices.length;
 
-function editActivity(id) {
-  const a = state.activities.find(x => x.id === id);
-  if (!a) return;
-  document.getElementById('activity-id').value = a.id;
-  document.getElementById('activity-name').value = a.name;
-  document.getElementById('activity-date').value = a.startDate;
-  document.getElementById('activity-days').value = a.days;
-  document.getElementById('activity-type').value = a.type;
-  document.getElementById('activity-notes').value = a.notes || '';
-  document.getElementById('activity-in-board').checked = a.showInCamperBoard !== false;
-  document.getElementById('activity-cancel').hidden = false;
-  updateLiveConflict();
-  document.getElementById('activity-form').scrollIntoView({ behavior: 'smooth' });
-}
-
-function deleteActivity(id) {
-  if (!confirm('למחוק את הפעילות?')) return;
-  state.activities = state.activities.filter(a => a.id !== id);
-  saveState();
-  cloudDeleteActivity(id);
-  renderActivities();
-}
-
-function renderActivities() {
-  const list = document.getElementById('activities-list');
-  if (state.activities.length === 0) {
-    list.innerHTML = '<div class="empty-state">עוד לא הוזנו פעילויות. הוסף פעילות ראשונה למעלה.</div>';
-    return;
-  }
+  const list = document.getElementById('leads-list');
+  const emptyHint = document.getElementById('leads-empty-hint');
   list.innerHTML = '';
-  state.activities.forEach(a => {
-    const issues = detectConflicts(a);
-    const item = document.createElement('div');
-    item.className = 'activity-item' + (issues.length ? ' conflict' : '');
-    const typeLabels = { all: 'כל המחנה', split: 'מפוצל', boys: 'בנים בלבד', girls: 'בנות בלבד' };
-    const endDate = addDays(a.startDate, a.days - 1);
-    item.innerHTML = `
-      <div>
-        <div class="activity-title">${escapeHTML(a.name)}
-          <span class="activity-tag ${a.type}">${typeLabels[a.type]}</span>
-        </div>
-        <div class="activity-meta">
-          📅 ${formatHebrewDate(a.startDate)}${a.days > 1 ? ' עד ' + formatHebrewDate(endDate) : ''}
-          · ${a.days} ${a.days === 1 ? 'יום' : 'ימים'}
-        </div>
-        <div class="activity-meta">${a.showInCamperBoard !== false
-          ? '🗓️ <span style="color:#16a34a">מופיע בלוח לחניכים</span>'
-          : '🚫 <span style="color:#94a3b8">מוסתר מהלוח לחניכים</span>'}</div>
-        ${a.notes ? `<div class="activity-meta">📝 ${escapeHTML(a.notes)}</div>` : ''}
-        ${issues.length ? `<div class="activity-conflict-msg">⚠️ ${issues.join(' • ')}</div>` : ''}
-      </div>
-      <div class="activity-actions">
-        <button onclick="editActivity('${a.id}')">✏️ עריכה</button>
-        <button class="delete" onclick="deleteActivity('${a.id}')">🗑️ מחק</button>
-      </div>
-    `;
-    list.appendChild(item);
+  const placeLabels = { header: 'כותרת עליונה', hero: 'עמוד הבית', contact: 'יצירת קשר', floating: 'כפתור צף' };
+  const recent = state.leads.slice(0, 20);
+  emptyHint.hidden = recent.length > 0;
+  recent.forEach(l => {
+    const li = document.createElement('li');
+    const date = new Date(l.ts);
+    li.innerHTML = `<span>פנייה מ${placeLabels[l.place] || l.place}</span><time>${date.toLocaleDateString('he-IL')} ${date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</time>`;
+    list.appendChild(li);
   });
 }
 
-// expose for inline handlers
-window.editActivity = editActivity;
-window.deleteActivity = deleteActivity;
-
-// ---------------- Summer calendar (overview) ----------------
-function renderSummerCalendar() {
-  const container = document.getElementById('summer-calendar');
-  container.innerHTML = '';
-  const months = monthsBetween(CAMP_START, CAMP_END);
-
-  // Build per-day map
-  const dayMap = {}; // iso -> {unavailableCounselors:[], activities:[], conflicts:[]}
-  state.counselors.forEach(c => {
-    c.vacationDates.forEach(d => {
-      dayMap[d] = dayMap[d] || { unavailable: [], activities: [], conflicts: [] };
-      dayMap[d].unavailable.push(c);
-    });
-  });
-  state.activities.forEach(a => {
-    const range = rangeISO(a.startDate, a.days);
-    const issues = detectConflicts(a);
-    range.forEach(d => {
-      dayMap[d] = dayMap[d] || { unavailable: [], activities: [], conflicts: [] };
-      dayMap[d].activities.push(a);
-      if (issues.length) dayMap[d].conflicts.push(a);
-    });
-  });
-
-  months.forEach(({ year, month }) => {
-    container.appendChild(buildMonth(year, month, null, iso => {
-      if (!isInCamp(iso)) return null;
-      const info = dayMap[iso];
-      let className = '';
-      let content = '';
-      if (info?.conflicts?.length) {
-        className = 'has-conflict';
-        content = `<div class="day-activity">${escapeHTML(info.activities[0].name)}</div><div class="day-conflict">⚠️ קונפליקט</div>`;
-      } else if (info?.activities?.length) {
-        className = 'has-activity';
-        content = `<div class="day-activity">${escapeHTML(info.activities[0].name)}</div>`;
-      } else if (info?.unavailable?.length) {
-        className = 'unavailable';
-        const dots = info.unavailable.map(c =>
-          `<div class="day-mini-dot" title="${escapeHTML(c.name)}" style="background:${c.gender === 'M' ? '#1e40af' : '#9d174d'}"></div>`
-        ).join('');
-        content = `<div class="day-dots">${dots}</div>`;
-      }
-      return { className, content };
-    }));
-  });
-
-  renderStats(dayMap);
+function renderAdminContentForm() {
+  document.getElementById('f-business-name').value = state.site.businessName;
+  document.getElementById('f-tagline').value = state.site.tagline;
+  document.getElementById('f-about').value = state.site.about;
+  document.getElementById('f-phone').value = state.site.phone;
+  document.getElementById('f-address').value = state.site.address;
+  document.getElementById('f-hours').value = state.site.hours;
+  document.getElementById('f-instagram').value = state.site.instagram;
+  const preview = document.getElementById('logo-preview');
+  const fallback = document.getElementById('logo-preview-fallback');
+  if (state.site.logo) { preview.src = state.site.logo; preview.hidden = false; fallback.hidden = true; }
+  else { preview.hidden = true; fallback.hidden = false; }
 }
 
-function renderStats(dayMap) {
-  const totalDays = countCampDays();
-  let freeDays = 0, activityDays = 0, unavailDays = 0, conflictDays = 0;
-  for (let d = parseISO(CAMP_START); d <= parseISO(CAMP_END); d.setDate(d.getDate() + 1)) {
-    const iso = toISO(d);
-    const info = dayMap[iso];
-    if (!info) { freeDays++; continue; }
-    if (info.conflicts.length) conflictDays++;
-    else if (info.activities.length) activityDays++;
-    else if (info.unavailable.length) unavailDays++;
-    else freeDays++;
-  }
-  document.getElementById('summary-stats').innerHTML = `
-    <div class="stat-card"><div class="stat-value">${totalDays}</div><div class="stat-label">סה״כ ימי קיץ</div></div>
-    <div class="stat-card"><div class="stat-value" style="color:#16a34a">${activityDays}</div><div class="stat-label">ימי פעילות</div></div>
-    <div class="stat-card"><div class="stat-value" style="color:#f59e0b">${unavailDays}</div><div class="stat-label">ימים שמישהו בחופש</div></div>
-    <div class="stat-card"><div class="stat-value" style="color:#dc2626">${conflictDays}</div><div class="stat-label">ימי קונפליקט</div></div>
-    <div class="stat-card"><div class="stat-value">${freeDays}</div><div class="stat-label">ימים פנויים לחלוטין</div></div>
-  `;
-}
-
-function countCampDays() {
-  let n = 0;
-  for (let d = parseISO(CAMP_START); d <= parseISO(CAMP_END); d.setDate(d.getDate() + 1)) n++;
-  return n;
-}
-
-// ---------------- Export / Import ----------------
-document.getElementById('btn-export').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `summer-camp-plan-${toISO(new Date())}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+document.getElementById('content-form').addEventListener('submit', e => {
+  e.preventDefault();
+  state.site.businessName = document.getElementById('f-business-name').value.trim() || DEFAULT_STATE.site.businessName;
+  state.site.tagline = document.getElementById('f-tagline').value.trim();
+  state.site.about = document.getElementById('f-about').value.trim();
+  saveState();
+  renderSite();
+  document.getElementById('admin-brand-name').textContent = state.site.businessName;
+  cloudWriteSite();
+  flashConfirm('content-save-confirm');
 });
 
-document.getElementById('btn-import').addEventListener('click', () => {
-  document.getElementById('import-file').click();
+document.getElementById('contact-form').addEventListener('submit', e => {
+  e.preventDefault();
+  state.site.phone = document.getElementById('f-phone').value.trim();
+  state.site.address = document.getElementById('f-address').value.trim();
+  state.site.hours = document.getElementById('f-hours').value.trim();
+  state.site.instagram = document.getElementById('f-instagram').value.trim();
+  saveState();
+  renderSite();
+  cloudWriteSite();
+  flashConfirm('contact-save-confirm');
 });
 
-document.getElementById('import-file').addEventListener('change', e => {
+document.getElementById('logo-upload').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    try {
-      const data = JSON.parse(ev.target.result);
-      if (!data.counselors || !data.activities) throw new Error('bad format');
-      if (!confirm('להחליף את כל הנתונים הקיימים בנתונים מהקובץ?')) return;
-      state = data;
-      saveState();
-      cloudBulkReplace();
-      initRender();
-      alert('הנתונים יובאו בהצלחה');
-    } catch (err) {
-      alert('שגיאה בייבוא הקובץ: ' + err.message);
-    }
-  };
-  reader.readAsText(file);
+  const dataUrl = await compressImage(file, 500, 0.85);
+  state.site.logo = dataUrl;
+  saveState();
+  renderSite();
+  renderAdminContentForm();
+  cloudWriteSite();
 });
 
-// ---------------- Initial render ----------------
-function initRender() {
-  renderCounselors();
-  populateCounselorSelect();
-  renderVacationCalendar();
-  renderActivities();
-}
+document.getElementById('logo-remove').addEventListener('click', () => {
+  state.site.logo = '';
+  saveState();
+  renderSite();
+  renderAdminContentForm();
+  cloudWriteSite();
+});
 
-// ---------------- Schedule Board ----------------
-const ACTIVITY_COLORS = [
-  { bg:'#ede9fe', text:'#5b21b6', dot:'#7c3aed' },
-  { bg:'#cffafe', text:'#0e7490', dot:'#06b6d4' },
-  { bg:'#dcfce7', text:'#15803d', dot:'#16a34a' },
-  { bg:'#fef9c3', text:'#854d0e', dot:'#ca8a04' },
-  { bg:'#fee2e2', text:'#991b1b', dot:'#dc2626' },
-  { bg:'#fce7f3', text:'#9d174d', dot:'#ec4899' },
-  { bg:'#dbeafe', text:'#1e40af', dot:'#3b82f6' },
-  { bg:'#d1fae5', text:'#065f46', dot:'#059669' },
-];
-
-const TYPE_CLASS = { all:'act-all', split:'act-split', boys:'act-boys', girls:'act-girls' };
-const TYPE_LABEL = { all:'כל המחנה', split:'מפוצל', boys:'בנים בלבד', girls:'בנות בלבד' };
-const COUNSELOR_COLORS = ['#3b82f6','#8b5cf6','#ec4899','#f97316'];
-
-// ---------------- Countdown to camp start (live, every second) ----------------
-let mainCountdownInterval = null;
-let boardCountdownInterval = null;
-
-function timeUntilCampStart() {
-  const start = parseISO(CAMP_START);
-  start.setHours(0, 0, 0, 0);
-  const ms = start - new Date();
-  if (ms <= 0) return null;
-  return {
-    days: Math.floor(ms / 86400000),
-    hours: Math.floor((ms % 86400000) / 3600000),
-    minutes: Math.floor((ms % 3600000) / 60000),
-    seconds: Math.floor((ms % 60000) / 1000),
-  };
-}
-
-function renderCountdownInto(el, big) {
-  if (!el) return;
-  const t = timeUntilCampStart();
-  if (!t) { el.hidden = true; return; }
+function flashConfirm(id) {
+  const el = document.getElementById(id);
   el.hidden = false;
-  const numClass = big ? 'cb-cd-number' : 'cd-number';
-  let html;
-  if (t.days >= 1) {
-    html = `<span class="cd-icon">⏰</span><span>עוד</span>` +
-           `<span class="${numClass}">${t.days}</span>` +
-           `<span>${t.days === 1 ? 'יום' : 'ימים'} ל${big ? 'חופש הגדול' : 'קייטנה'}</span>` +
-           `<span class="cd-icon">${big ? '☀️' : '🌞'}</span>`;
-  } else {
-    const hh = String(t.hours).padStart(2, '0');
-    const mm = String(t.minutes).padStart(2, '0');
-    const ss = String(t.seconds).padStart(2, '0');
-    html = `<span class="cd-icon">🎉</span><span>עוד</span>` +
-           `<span class="${numClass}">${hh}:${mm}:${ss}</span>` +
-           `<span>ל${big ? 'חופש הגדול' : 'קייטנה'}!</span>`;
-  }
-  if (el.innerHTML !== html) el.innerHTML = html;
+  setTimeout(() => { el.hidden = true; }, 2200);
 }
 
-function renderMainCountdown() { renderCountdownInto(document.getElementById('main-countdown'), false); }
-function renderBoardCountdown() { renderCountdownInto(document.querySelector('.js-board-countdown'), true); }
-
-function startMainCountdown() {
-  renderMainCountdown();
-  if (mainCountdownInterval) clearInterval(mainCountdownInterval);
-  mainCountdownInterval = setInterval(renderMainCountdown, 1000);
-}
-
-function startBoardCountdown() {
-  renderBoardCountdown();
-  if (boardCountdownInterval) clearInterval(boardCountdownInterval);
-  boardCountdownInterval = setInterval(renderBoardCountdown, 1000);
-}
-
-function stopBoardCountdown() {
-  if (boardCountdownInterval) { clearInterval(boardCountdownInterval); boardCountdownInterval = null; }
-}
-
-document.getElementById('btn-update-board').addEventListener('click', () => {
-  renderBoard();
-  document.getElementById('board-overlay').classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
-  startBoardCountdown();
-});
-
-document.getElementById('btn-close-board').addEventListener('click', closeBoard);
-document.getElementById('board-overlay').addEventListener('click', e => {
-  if (e.target === e.currentTarget) closeBoard();
-});
-document.getElementById('btn-print-board').addEventListener('click', () => window.print());
-
-function closeBoard() {
-  document.getElementById('board-overlay').classList.add('hidden');
-  document.body.style.overflow = '';
-  stopBoardCountdown();
-}
-
-function renderBoard() {
-  const el = document.getElementById('board-content');
-
-  // Camper-facing board: ONLY activities flagged for the camper board.
-  // No counselor vacations or conflicts — campers just see what's on.
-  const boardActivities = state.activities
-    .filter(a => a.showInCamperBoard !== false)
-    .slice()
-    .sort((a, b) => a.startDate.localeCompare(b.startDate));
-
-  const actColorMap = {};
-  boardActivities.forEach((a, i) => {
-    actColorMap[a.id] = ACTIVITY_COLORS[i % ACTIVITY_COLORS.length];
+function compressImage(file, maxDim = 1100, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) { height = Math.round(height * maxDim / width); width = maxDim; }
+          else { width = Math.round(width * maxDim / height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
   });
+}
 
-  const dayActs = {};
-  boardActivities.forEach(a => {
-    rangeISO(a.startDate, a.days).forEach(d => {
-      if (!isInCamp(d)) return;
-      (dayActs[d] = dayActs[d] || []).push(a);
-    });
-  });
-
-  const now = new Date();
-  const generatedStr = `${now.getDate()}.${now.getMonth() + 1}.${now.getFullYear()}`;
-  const todayISO = toISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
-
-  // Festive hero with live countdown.
-  let html = `
-    <div class="cb-hero">
-      <div class="cb-hero-deco cb-deco-sun">☀️</div>
-      <div class="cb-hero-deco cb-deco-beach">🏖️</div>
-      <div class="cb-hero-deco cb-deco-palm">🌴</div>
-      <div class="cb-hero-deco cb-deco-wave">🌊</div>
-      <div class="cb-hero-inner">
-        <div class="cb-title">🌞 לוח הקיץ שלנו 🏖️</div>
-        <div class="cb-subtitle">🗓️ ${formatHebrewDate(CAMP_START)} — ${formatHebrewDate(CAMP_END)} · ${countCampDays()} ימים של כיף</div>
-        <div class="cb-countdown js-board-countdown" hidden></div>
-      </div>
-    </div>
-  `;
-
-  if (boardActivities.length === 0) {
-    html += `<div class="cb-empty">
-      <div style="font-size:48px;margin-bottom:10px">🗓️</div>
-      עדיין לא סומנו פעילויות ללוח החניכים.<br>
-      בלשונית "🎯 פעילויות" סמנו <b>"🗓️ להציג בלוח לחניכים"</b> עבור הפעילויות שתרצו לשתף.
-    </div>`;
-    el.innerHTML = html;
-    return;
-  }
-
-  const months = monthsBetween(CAMP_START, CAMP_END);
-  months.forEach(({ year, month }, idx) => {
-    html += buildCamperMonth(year, month, dayActs, actColorMap, todayISO);
-    if (idx < months.length - 1) html += `<div class="cb-divider">✦ &nbsp; ☀️ &nbsp; ✦</div>`;
-  });
-
-  // Friendly activity legend with vivid color-matched cards.
-  html += `<div class="cb-legend"><div class="cb-legend-title">🎯 הפעילויות שלנו</div><div class="cb-legend-grid">`;
-  boardActivities.forEach(a => {
-    const col = actColorMap[a.id];
-    const endDate = addDays(a.startDate, a.days - 1);
-    html += `
-      <div class="cb-legend-item" style="background:${col.bg};border-right:8px solid ${col.dot}">
-        <div class="cb-legend-name" style="color:${col.text}">${escapeHTML(a.name)}</div>
-        <div class="cb-legend-meta">📅 ${formatHebrewDate(a.startDate)}${a.days > 1 ? ' – ' + formatHebrewDate(endDate) : ''}${a.notes ? '<br>📝 ' + escapeHTML(a.notes) : ''}</div>
+// ---- Gallery admin ----
+function renderAdminGalleryList() {
+  const list = document.getElementById('admin-gallery-list');
+  list.innerHTML = '';
+  state.gallery.forEach((item, idx) => {
+    const li = document.createElement('li');
+    const media = item.img ? `<img src="${item.img}" alt="">` : `<div class="gallery-photo-placeholder" style="width:90px;height:68px;font-size:.6rem;padding:.3rem;">ללא תמונה</div>`;
+    li.innerHTML = `
+      ${media}
+      <input type="text" value="${escapeHtml(item.caption || '')}" placeholder="כיתוב לתמונה" data-role="caption">
+      <div class="row-actions">
+        <button type="button" data-role="up" title="הזזה למעלה" ${idx === 0 ? 'disabled' : ''}>↑</button>
+        <button type="button" data-role="down" title="הזזה למטה" ${idx === state.gallery.length - 1 ? 'disabled' : ''}>↓</button>
+        <button type="button" data-role="delete" class="danger" title="מחיקה">✕</button>
       </div>`;
-  });
-  html += `</div></div>`;
-
-  // Warm team footer — names only, no internal availability info.
-  html += `<div class="cb-team-footer">
-    <div class="cb-team-title">💛 הצוות שלכם 💛</div>
-    <div class="cb-team-chips">
-      ${state.counselors.map(c => `<span class="cb-team-chip ${c.gender}">${c.gender === 'M' ? '👦' : '👧'} ${escapeHTML(c.name)}</span>`).join('')}
-    </div>
-    <div class="cb-team-msg">קיץ של חוויות, כיף וזיכרונות מחכה לכם! 🌞✨</div>
-  </div>`;
-
-  html += `<div class="cb-footer">להתראות בקייטנה! ⛱️ &nbsp;·&nbsp; הופק ב-${generatedStr}</div>`;
-
-  el.innerHTML = html;
-}
-
-function buildCamperMonth(year, month, dayActs, actColorMap, todayISO) {
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const firstWeekday = new Date(year, month - 1, 1).getDay(); // Sun=0
-
-  let html = `<div class="cb-month">`;
-  html += `<div class="cb-month-title">${HEBREW_MONTHS[month] || `${month}/${year}`}</div>`;
-  html += `<div class="cb-weekdays">${HEBREW_DAYS.map(d => `<div class="cb-weekday">${d}</div>`).join('')}</div>`;
-  html += `<div class="cb-grid">`;
-
-  for (let i = 0; i < firstWeekday; i++) html += `<div class="cb-cell blank"></div>`;
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const cellDate = new Date(year, month - 1, day);
-    const iso = toISO(cellDate);
-    const dow = cellDate.getDay(); // 0=Sun, 5=Fri, 6=Sat
-    const isWeekend = dow === 5 || dow === 6;
-
-    if (!isInCamp(iso)) {
-      html += `<div class="cb-cell outside${isWeekend ? ' weekend' : ''}"><div class="cb-daynum">${day}</div></div>`;
-      continue;
-    }
-
-    const acts = dayActs[iso] || [];
-    const classes = ['cb-cell'];
-    if (acts.length) classes.push('has-act');
-    if (isWeekend) classes.push('weekend');
-    if (iso === todayISO) classes.push('today');
-    if (iso === CAMP_START) classes.push('camp-start');
-    if (iso === CAMP_END) classes.push('camp-end');
-
-    html += `<div class="${classes.join(' ')}">`;
-    html += `<div class="cb-daynum">${day}</div>`;
-    if (iso === CAMP_START) html += `<div class="cb-badge cb-badge-start">🎉 פתיחה!</div>`;
-    if (iso === CAMP_END) html += `<div class="cb-badge cb-badge-end">🌅 יום סיום</div>`;
-    if (iso === todayISO) html += `<div class="cb-badge cb-badge-today">👈 היום</div>`;
-    acts.forEach(a => {
-      const col = actColorMap[a.id];
-      html += `<div class="cb-act" style="background:${col.bg};color:${col.text}">${escapeHTML(a.name)}</div>`;
+    li.querySelector('[data-role="caption"]').addEventListener('input', e => {
+      item.caption = e.target.value; saveState(); renderGallery(); cloudWriteGalleryItem(item);
     });
-    html += `</div>`;
-  }
-
-  html += `</div></div>`;
-  return html;
+    li.querySelector('[data-role="delete"]').addEventListener('click', () => {
+      state.gallery.splice(idx, 1); saveState(); renderAdminGalleryList(); renderGallery(); renderAdminOverview();
+      cloudDeleteGalleryItem(item.id);
+    });
+    li.querySelector('[data-role="up"]').addEventListener('click', () => {
+      if (idx === 0) return;
+      [state.gallery[idx - 1], state.gallery[idx]] = [state.gallery[idx], state.gallery[idx - 1]];
+      saveState(); renderAdminGalleryList(); renderGallery(); cloudWriteGalleryOrder();
+    });
+    li.querySelector('[data-role="down"]').addEventListener('click', () => {
+      if (idx === state.gallery.length - 1) return;
+      [state.gallery[idx + 1], state.gallery[idx]] = [state.gallery[idx], state.gallery[idx + 1]];
+      saveState(); renderAdminGalleryList(); renderGallery(); cloudWriteGalleryOrder();
+    });
+    list.appendChild(li);
+  });
 }
 
-// ---------------- Vacation-vs-Activity conflict resolution ----------------
-// When a counselor marks themselves unavailable on a date that already has
-// a planned activity that requires them, we propose moving the activity.
-
-function checkVacationToggleConflicts(counselorId, newDate) {
-  // Returns array of { activity, proposedDate } for activities that would
-  // conflict if `newDate` were added to `counselorId`'s vacationDates.
-  // `proposedDate` is null when no free range was found.
-
-  // Simulate the new vacation date in state, find affected activities and
-  // their proposed new start dates, then restore state.
-  const counselor = state.counselors.find(c => c.id === counselorId);
-  if (!counselor) return [];
-  const original = counselor.vacationDates.slice();
-  counselor.vacationDates = [...original, newDate].sort();
-
-  const issues = [];
-  for (const a of state.activities) {
-    const range = rangeISO(a.startDate, a.days);
-    if (!range.includes(newDate)) continue;
-    const required = requiredCounselorsForType(a.type);
-    if (!required.has(counselorId)) continue;
-    // This activity now conflicts. Try to find a new free range.
-    const proposedDate = findFreeRange(a.days, a.type);
-    issues.push({ activity: a, proposedDate });
-  }
-
-  counselor.vacationDates = original;
-  return issues;
-}
-
-function showVacationConflictModal(counselor, newDate, conflicts) {
-  const overlay = document.getElementById('vacation-conflict-overlay');
-  const body = document.getElementById('vacation-conflict-body');
-  const dateHeb = formatHebrewDate(newDate);
-
-  let html = `
-    <p style="margin-bottom:14px;line-height:1.6">
-      סימנת ש-<b>${escapeHTML(counselor.name)}</b> לא יכול ב-<b>${dateHeb}</b>,
-      אבל בתאריך הזה כבר מתוכננת ${conflicts.length === 1 ? 'פעילות' : conflicts.length + ' פעילויות'}
-      שדורש${conflicts.length === 1 ? 'ת' : 'ות'} את ${counselor.gender === 'M' ? 'נוכחותו' : 'נוכחותה'}:
-    </p>
-  `;
-  conflicts.forEach(({ activity, proposedDate }) => {
-    const endOld = addDays(activity.startDate, activity.days - 1);
-    html += `<div class="conflict-activity-card">
-      <div style="font-weight:700;margin-bottom:6px">🎯 ${escapeHTML(activity.name)}</div>
-      <div class="conflict-old">📅 תאריך נוכחי: ${formatHebrewDate(activity.startDate)}${activity.days > 1 ? ' – ' + formatHebrewDate(endOld) : ''}</div>`;
-    if (proposedDate) {
-      const endNew = addDays(proposedDate, activity.days - 1);
-      html += `<div class="conflict-new">✅ הצעה: ${formatHebrewDate(proposedDate)}${activity.days > 1 ? ' – ' + formatHebrewDate(endNew) : ''}</div>`;
-    } else {
-      html += `<div class="conflict-no-fit">⚠️ לא נמצא תאריך חלופי פנוי — תצטרכ${counselor.gender === 'M' ? '' : 'י'} לשנות ידנית</div>`;
-    }
-    html += `</div>`;
-  });
-  body.innerHTML = html;
-
-  // Wire buttons (clone to drop previous listeners)
-  const moveBtn = document.getElementById('btn-conflict-move');
-  const anywayBtn = document.getElementById('btn-conflict-anyway');
-  const cancelBtn = document.getElementById('btn-conflict-cancel');
-  const newMove = moveBtn.cloneNode(true);
-  const newAnyway = anywayBtn.cloneNode(true);
-  const newCancel = cancelBtn.cloneNode(true);
-  moveBtn.parentNode.replaceChild(newMove, moveBtn);
-  anywayBtn.parentNode.replaceChild(newAnyway, anywayBtn);
-  cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
-
-  const allHaveProposal = conflicts.every(c => c.proposedDate);
-  if (!allHaveProposal) {
-    newMove.disabled = true;
-    newMove.style.opacity = '0.5';
-    newMove.style.cursor = 'not-allowed';
-    newMove.title = 'אין תאריך חלופי פנוי לכל הפעילויות';
-  }
-
-  newMove.addEventListener('click', () => {
-    if (!allHaveProposal) return;
-    applyVacationWithMoves(counselor, newDate, conflicts);
-    closeVacationConflictModal();
-  });
-  newAnyway.addEventListener('click', () => {
-    const actNames = conflicts.map(c => `"${c.activity.name}"`).join(', ');
-    const msg = `האם אתה בטוח שתרצה בכל זאת לקבוע חופשה ב-${formatHebrewDate(newDate)}?\n\nהפעילות ${actNames} תישאר בתאריך המקורי וזה יסומן כקונפליקט בלוח.`;
-    if (!confirm(msg)) return;
-    applyVacationAnyway(counselor, newDate, conflicts);
-    closeVacationConflictModal();
-  });
-  newCancel.addEventListener('click', closeVacationConflictModal);
-
-  overlay.classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
-}
-
-function closeVacationConflictModal() {
-  document.getElementById('vacation-conflict-overlay').classList.add('hidden');
-  document.body.style.overflow = '';
-}
-
-function applyVacationWithMoves(counselor, newDate, conflicts) {
-  // Add the vacation date
-  counselor.vacationDates.push(newDate);
-  counselor.vacationDates.sort();
-  cloudAddVacation(counselor.id, newDate);
-
-  // Move each conflicting activity and append a note explaining why
-  const moves = [];
-  conflicts.forEach(({ activity, proposedDate }) => {
-    if (!proposedDate) return;
-    const oldDate = activity.startDate;
-    activity.startDate = proposedDate;
-    const noteLine = `📢 הוזז מ-${formatHebrewDate(oldDate)} ל-${formatHebrewDate(proposedDate)} כי ${counselor.name} לא יכול ב-${formatHebrewDate(newDate)}`;
-    activity.notes = activity.notes ? activity.notes + ' | ' + noteLine : noteLine;
-    cloudWriteActivity(activity);
-    moves.push({ name: activity.name, from: oldDate, to: proposedDate });
-  });
-  state.activities.sort((a, b) => a.startDate.localeCompare(b.startDate));
+document.getElementById('gallery-upload').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const dataUrl = await compressImage(file, 1100, 0.72);
+  const item = { id: uid('g'), img: dataUrl, caption: '' };
+  state.gallery.push(item);
   saveState();
-
-  // Build a notification message for all counselors
-  const movesText = moves
-    .map(m => `• "${m.name}" עבר מ-${formatHebrewDate(m.from)} ל-${formatHebrewDate(m.to)}`)
-    .join('\n');
-  const message = `📅 לוח הפעילויות עודכן\n${counselor.name} לא יכול ב-${formatHebrewDate(newDate)}:\n${movesText}`;
-  cloudPushNotification(message);
-  showToast(message);
-
-  renderVacationCalendar();
-  renderActivities();
-  if (document.querySelector('#tab-calendar.active')) renderSummerCalendar();
-}
-
-function applyVacationAnyway(counselor, newDate, conflicts) {
-  // Add the vacation date without moving any activities. The existing
-  // conflict will then show on the activity list and calendar.
-  counselor.vacationDates.push(newDate);
-  counselor.vacationDates.sort();
-  cloudAddVacation(counselor.id, newDate);
-  saveState();
-
-  // Broadcast a notification so the other counselors know a conflict was
-  // accepted (rather than silently appearing as a red flag on their board).
-  const actNames = conflicts.map(c => `"${c.activity.name}"`).join(', ');
-  const message = `⚠️ קונפליקט חדש בלוח\n${counselor.name} סימן חופשה ב-${formatHebrewDate(newDate)} למרות ש-${actNames} מתוכננ${conflicts.length === 1 ? 'ת' : 'ות'} באותו תאריך.`;
-  cloudPushNotification(message);
-  showToast(message);
-
-  renderVacationCalendar();
-  renderActivities();
-  if (document.querySelector('#tab-calendar.active')) renderSummerCalendar();
-}
-
-// Close modal on backdrop click
-document.getElementById('vacation-conflict-overlay').addEventListener('click', e => {
-  if (e.target === e.currentTarget) closeVacationConflictModal();
+  renderAdminGalleryList();
+  renderGallery();
+  renderAdminOverview();
+  cloudWriteGalleryItem(item);
+  e.target.value = '';
 });
 
-// ---------------- Toast notifications ----------------
-function showToast(message, durationMs = 7000) {
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-  const toast = document.createElement('div');
-  toast.className = 'toast';
-  toast.textContent = message;
-  container.appendChild(toast);
-  // trigger transition
-  requestAnimationFrame(() => toast.classList.add('show'));
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => toast.remove(), 300);
-  }, durationMs);
-}
-
-// ---------------- Cloud Sync (Firebase Firestore) ----------------
-const CLOUD_CFG_KEY = 'summerCampPlanner_cloudConfig_v1';
-const CLOUD_GROUP_KEY = 'summerCampPlanner_groupCode_v1';
-
-// Built-in Firebase project (created by Ariel). All 4 counselors share the
-// same Firestore project and the same group code, so opening the URL is
-// enough — no manual setup needed.
-const DEFAULT_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAqQE7B8v2J5M8Sv2VcN-sI6aWdpPP9wVE",
-  authDomain: "summer-camp-8aabd.firebaseapp.com",
-  projectId: "summer-camp-8aabd",
-  storageBucket: "summer-camp-8aabd.firebasestorage.app",
-  messagingSenderId: "77485499740",
-  appId: "1:77485499740:web:52b13f0275363fe9b48d99",
-};
-let cloudState = {
-  active: false,
-  db: null,
-  groupCode: null,
-  unsubCounselors: null,
-  unsubActivities: null,
-  unsubNotifications: null,
-  applyingRemote: false,
-  fns: null,
-  counselorWriteTimers: {},
-  pageLoadedAt: Date.now(),
-  clientId: 'cl_' + Math.random().toString(36).slice(2, 10),
-};
-
-function setCloudIndicator(status, label) {
-  const dot = document.getElementById('cloud-dot');
-  const labelEl = document.getElementById('cloud-label');
-  if (!dot) return;
-  dot.className = 'cloud-dot ' + status;
-  if (label) labelEl.textContent = label;
-}
-
-async function initCloud() {
-  const cfgRaw = localStorage.getItem(CLOUD_CFG_KEY);
-  const groupCode = localStorage.getItem(CLOUD_GROUP_KEY);
-  if (!groupCode) return; // boot() routes new users through onboarding first
-  try {
-    const cfg = cfgRaw ? JSON.parse(cfgRaw) : DEFAULT_FIREBASE_CONFIG;
-    setCloudIndicator('syncing', 'מתחבר...');
-    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
-    const firestoreMod = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js');
-    const {
-      getFirestore, doc, getDoc, setDoc, deleteDoc, updateDoc,
-      arrayUnion, arrayRemove, collection, onSnapshot, getDocs, writeBatch,
-    } = firestoreMod;
-
-    const app = initializeApp(cfg);
-    const db = getFirestore(app);
-    cloudState.db = db;
-    cloudState.groupCode = groupCode;
-    cloudState.fns = { doc, setDoc, deleteDoc, updateDoc, arrayUnion, arrayRemove, collection, onSnapshot, getDocs, writeBatch };
-    cloudState.active = true;
-
-    const counselorsCol = collection(db, 'camps', groupCode, 'counselors');
-    const activitiesCol = collection(db, 'camps', groupCode, 'activities');
-    const notificationsCol = collection(db, 'camps', groupCode, 'notifications');
-
-    // Seed counselors if this group is empty in the cloud AND we have a
-    // locally configured team (set up via onboarding). For a fresh "join" we
-    // intentionally leave the local team empty so we don't seed default
-    // placeholders into someone else's group.
-    const seedSnap = await getDocs(counselorsCol);
-    if (seedSnap.empty && state.counselors.length > 0) {
-      const batch = writeBatch(db);
-      state.counselors.forEach(c => {
-        batch.set(doc(db, 'camps', groupCode, 'counselors', c.id), {
-          id: c.id, name: c.name, gender: c.gender,
-          vacationDates: c.vacationDates || [],
-          passwordHash: c.passwordHash || '',
-        });
-      });
-      state.activities.forEach(a => {
-        batch.set(doc(db, 'camps', groupCode, 'activities', a.id), a);
-      });
-      await batch.commit();
-    }
-
-    // One-time shared reset: wipe every counselor's vacationDates once for the
-    // whole group. Gated by a token in a meta doc so it runs exactly once.
-    try {
-      const metaRef = doc(db, 'camps', groupCode, 'meta', 'state');
-      const metaSnap = await getDoc(metaRef);
-      const applied = metaSnap.exists() ? metaSnap.data().vacationResetToken : null;
-      if (applied !== RESET_TOKEN) {
-        const curSnap = await getDocs(counselorsCol);
-        const batch = writeBatch(db);
-        curSnap.forEach(d => batch.update(d.ref, { vacationDates: [] }));
-        batch.set(metaRef, { vacationResetToken: RESET_TOKEN, resetAt: Date.now() }, { merge: true });
-        await batch.commit();
-      }
-    } catch (e) {
-      console.error('cloud vacation reset failed', e);
-    }
-
-    // One-time targeted password reset: wipe passwordHash for any counselor
-    // whose name appears in PASSWORD_RESET_NAMES (e.g., a coach who forgot
-    // their password). Idempotent — gated by a meta token.
-    try {
-      const metaRef = doc(db, 'camps', groupCode, 'meta', 'state');
-      const metaSnap = await getDoc(metaRef);
-      const applied = metaSnap.exists() ? metaSnap.data().passwordResetToken : null;
-      if (applied !== PASSWORD_RESET_TOKEN) {
-        const curSnap = await getDocs(counselorsCol);
-        const batch = writeBatch(db);
-        curSnap.forEach(d => {
-          const data = d.data();
-          if (PASSWORD_RESET_NAMES.includes(data.name)) {
-            batch.update(d.ref, { passwordHash: '' });
-          }
-        });
-        batch.set(metaRef, { passwordResetToken: PASSWORD_RESET_TOKEN, pwResetAt: Date.now() }, { merge: true });
-        await batch.commit();
-      }
-    } catch (e) {
-      console.error('cloud password reset failed', e);
-    }
-
-    // Counselors live listener
-    cloudState.unsubCounselors = onSnapshot(counselorsCol, snap => {
-      cloudState.applyingRemote = true;
-      const remote = [];
-      snap.forEach(d => remote.push(d.data()));
-      remote.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
-      if (remote.length) {
-        state.counselors = remote.map(c => ({
-          id: c.id,
-          name: c.name || '',
-          gender: c.gender || 'M',
-          vacationDates: Array.isArray(c.vacationDates) ? c.vacationDates.slice().sort() : [],
-          passwordHash: c.passwordHash || '',
-        }));
-        saveState();
-        renderCounselors();
-        populateCounselorSelect();
-        renderVacationCalendar();
-        renderActivities();
-        if (document.querySelector('#tab-calendar.active')) renderSummerCalendar();
-      }
-      cloudState.applyingRemote = false;
-      setCloudIndicator('on', 'מסונכרן');
-    }, err => {
-      console.error('cloud counselors onSnapshot error', err);
-      setCloudIndicator('error', 'שגיאה');
+// ---- Prices admin ----
+function renderAdminPriceList() {
+  const list = document.getElementById('admin-price-list');
+  list.innerHTML = '';
+  state.prices.forEach((item, idx) => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <input type="text" value="${escapeHtml(item.name)}" placeholder="שם הפריט" data-role="name">
+      <input type="number" min="0" value="${item.price}" placeholder="מחיר" data-role="price">
+      <input type="text" value="${escapeHtml(item.unit || '')}" placeholder="יחידה (אופציונלי)" data-role="unit">
+      <div class="row-actions">
+        <button type="button" data-role="delete" class="danger" title="מחיקה">✕</button>
+      </div>`;
+    const commitPrices = () => { saveState(); renderPrices(); cloudWritePriceItem(item); };
+    li.querySelector('[data-role="name"]').addEventListener('input', e => { item.name = e.target.value; commitPrices(); });
+    li.querySelector('[data-role="price"]').addEventListener('input', e => { item.price = Number(e.target.value) || 0; commitPrices(); });
+    li.querySelector('[data-role="unit"]').addEventListener('input', e => { item.unit = e.target.value; commitPrices(); });
+    li.querySelector('[data-role="delete"]').addEventListener('click', () => {
+      state.prices.splice(idx, 1); saveState(); renderAdminPriceList(); renderPrices(); renderAdminOverview();
+      cloudDeletePriceItem(item.id);
     });
-
-    // Notifications live listener — toast any added since this client loaded.
-    cloudState.unsubNotifications = onSnapshot(notificationsCol, snap => {
-      snap.docChanges().forEach(change => {
-        if (change.type !== 'added') return;
-        const data = change.doc.data();
-        if (!data || !data.message) return;
-        // Skip notifications older than this page load (i.e., initial snapshot
-        // backlog). Author also skips their own (showToast already fired locally).
-        if (data.timestamp < cloudState.pageLoadedAt) return;
-        if (data.authorClientId === cloudState.clientId) return;
-        showToast(data.message);
-      });
-    }, err => {
-      console.error('cloud notifications onSnapshot error', err);
-    });
-
-    // Activities live listener
-    cloudState.unsubActivities = onSnapshot(activitiesCol, snap => {
-      cloudState.applyingRemote = true;
-      const remote = [];
-      snap.forEach(d => remote.push(d.data()));
-      remote.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
-      state.activities = remote;
-      saveState();
-      renderActivities();
-      if (document.querySelector('#tab-calendar.active')) renderSummerCalendar();
-      cloudState.applyingRemote = false;
-      setCloudIndicator('on', 'מסונכרן');
-    }, err => {
-      console.error('cloud activities onSnapshot error', err);
-      setCloudIndicator('error', 'שגיאה');
-    });
-
-    setCloudIndicator('on', 'מסונכרן');
-  } catch (err) {
-    console.error('initCloud error', err);
-    setCloudIndicator('error', 'שגיאה');
-  }
+    list.appendChild(li);
+  });
 }
 
-// ---- Granular cloud writers ----
-function cloudWriteCounselor(c) {
-  if (!cloudState.active || cloudState.applyingRemote) return;
-  // Debounce per counselor to coalesce rapid name keystrokes
-  clearTimeout(cloudState.counselorWriteTimers[c.id]);
-  cloudState.counselorWriteTimers[c.id] = setTimeout(async () => {
-    try {
-      setCloudIndicator('syncing', 'שומר...');
-      const { doc, setDoc } = cloudState.fns;
-      await setDoc(doc(cloudState.db, 'camps', cloudState.groupCode, 'counselors', c.id), {
-        id: c.id, name: c.name, gender: c.gender,
-        vacationDates: c.vacationDates || [],
-        passwordHash: c.passwordHash || '',
-      });
-      setCloudIndicator('on', 'מסונכרן');
-    } catch (e) {
-      console.error('cloudWriteCounselor', e);
-      setCloudIndicator('error', 'שגיאה');
-    }
-  }, 300);
+document.getElementById('price-add-btn').addEventListener('click', () => {
+  const item = { id: uid('p'), name: 'פריט חדש', price: 0, unit: '', note: '' };
+  state.prices.push(item);
+  saveState();
+  renderAdminPriceList();
+  renderPrices();
+  renderAdminOverview();
+  cloudWritePriceItem(item);
+});
+
+// ---- Password change ----
+document.getElementById('password-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const current = document.getElementById('f-current-password').value;
+  const next = document.getElementById('f-new-password').value;
+  const err = document.getElementById('password-error');
+  const hash = await sha256(current);
+  if (hash !== state.adminPasswordHash) {
+    err.textContent = 'הסיסמה הנוכחית שגויה.'; err.hidden = false; return;
+  }
+  state.adminPasswordHash = await sha256(next);
+  saveState();
+  cloudWriteSite();
+  err.hidden = true;
+  document.getElementById('password-form').reset();
+  flashConfirm('password-save-confirm');
+});
+
+// ============================================================
+// CLOUD SYNC (optional, per-business Firebase project)
+// ============================================================
+function renderCloudPanel() {
+  const banner = document.getElementById('sync-banner');
+  if (cloud.active) {
+    banner.hidden = false;
+    banner.textContent = '☁ מחובר לסנכרון בענן — כל השינויים כאן מופיעים באתר החי לכל המבקרים, מכל מכשיר.';
+  } else {
+    banner.hidden = false;
+    banner.textContent = '⚠ סנכרון בענן לא מחובר. השינויים נשמרים בדפדפן הזה בלבד ולא יופיעו למבקרים אחרים. ראו הסבר בלשונית "סנכרון וסיסמה".';
+  }
+  document.getElementById('cloud-disconnected-view').hidden = cloud.active;
+  document.getElementById('cloud-connected-view').hidden = !cloud.active;
 }
 
-async function cloudAddVacation(counselorId, date) {
-  if (!cloudState.active || cloudState.applyingRemote) return;
-  try {
-    setCloudIndicator('syncing', 'שומר...');
-    const { doc, updateDoc, arrayUnion } = cloudState.fns;
-    await updateDoc(doc(cloudState.db, 'camps', cloudState.groupCode, 'counselors', counselorId), {
-      vacationDates: arrayUnion(date),
-    });
-    setCloudIndicator('on', 'מסונכרן');
-  } catch (e) {
-    console.error('cloudAddVacation', e);
-    setCloudIndicator('error', 'שגיאה');
-  }
-}
+async function connectCloud(cfg) {
+  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
+  const mod = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js');
+  const { getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, onSnapshot, addDoc, query, orderBy, limit, increment } = mod;
+  const app = initializeApp(cfg);
+  const db = getFirestore(app);
+  cloud.db = db;
+  cloud.fns = { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, onSnapshot, addDoc, query, orderBy, limit, increment };
 
-async function cloudRemoveVacation(counselorId, date) {
-  if (!cloudState.active || cloudState.applyingRemote) return;
-  try {
-    setCloudIndicator('syncing', 'שומר...');
-    const { doc, updateDoc, arrayRemove } = cloudState.fns;
-    await updateDoc(doc(cloudState.db, 'camps', cloudState.groupCode, 'counselors', counselorId), {
-      vacationDates: arrayRemove(date),
-    });
-    setCloudIndicator('on', 'מסונכרן');
-  } catch (e) {
-    console.error('cloudRemoveVacation', e);
-    setCloudIndicator('error', 'שגיאה');
+  const siteRef = doc(db, 'content', 'site');
+  const siteSnap = await getDoc(siteRef);
+  if (siteSnap.exists()) {
+    Object.assign(state.site, siteSnap.data());
+  } else {
+    await setDoc(siteRef, state.site);
   }
-}
 
-async function cloudWriteActivity(a) {
-  if (!cloudState.active || cloudState.applyingRemote) return;
-  try {
-    setCloudIndicator('syncing', 'שומר...');
-    const { doc, setDoc } = cloudState.fns;
-    await setDoc(doc(cloudState.db, 'camps', cloudState.groupCode, 'activities', a.id), a);
-    setCloudIndicator('on', 'מסונכרן');
-  } catch (e) {
-    console.error('cloudWriteActivity', e);
-    setCloudIndicator('error', 'שגיאה');
+  const pricesCol = collection(db, 'prices');
+  const galleryCol = collection(db, 'gallery');
+  const [pricesSnap, gallerySnap] = await Promise.all([getDocs(pricesCol), getDocs(galleryCol)]);
+  if (!pricesSnap.empty) {
+    state.prices = pricesSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
+  } else {
+    for (const p of state.prices) await setDoc(doc(db, 'prices', p.id), p);
   }
-}
+  if (!gallerySnap.empty) {
+    state.gallery = gallerySnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
+  } else {
+    for (let i = 0; i < state.gallery.length; i++) await setDoc(doc(db, 'gallery', state.gallery[i].id), { ...state.gallery[i], order: i });
+  }
 
-async function cloudDeleteActivity(id) {
-  if (!cloudState.active || cloudState.applyingRemote) return;
-  try {
-    setCloudIndicator('syncing', 'שומר...');
-    const { doc, deleteDoc } = cloudState.fns;
-    await deleteDoc(doc(cloudState.db, 'camps', cloudState.groupCode, 'activities', id));
-    setCloudIndicator('on', 'מסונכרן');
-  } catch (e) {
-    console.error('cloudDeleteActivity', e);
-    setCloudIndicator('error', 'שגיאה');
-  }
-}
+  cloud.active = true;
+  saveState();
+  localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cfg));
 
-async function cloudPushNotification(message) {
-  if (!cloudState.active) return;
-  try {
-    const { doc, setDoc } = cloudState.fns;
-    const id = 'n_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-    await setDoc(doc(cloudState.db, 'camps', cloudState.groupCode, 'notifications', id), {
-      id,
-      message,
-      timestamp: Date.now(),
-      authorClientId: cloudState.clientId,
-    });
-  } catch (e) {
-    console.error('cloudPushNotification', e);
-  }
-}
+  cloud.unsubs.push(onSnapshot(siteRef, snap => {
+    if (!snap.exists()) return;
+    cloud.applyingRemote = true;
+    Object.assign(state.site, snap.data());
+    saveState(); renderSite(); renderAdminAll();
+    cloud.applyingRemote = false;
+  }));
+  cloud.unsubs.push(onSnapshot(pricesCol, snap => {
+    state.prices = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
+    saveState(); renderPrices(); renderAdminPriceList(); renderAdminOverview();
+  }));
+  cloud.unsubs.push(onSnapshot(galleryCol, snap => {
+    state.gallery = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
+    saveState(); renderGallery(); renderAdminGalleryList(); renderAdminOverview();
+  }));
+  const leadsQuery = query(collection(db, 'leads'), orderBy('ts', 'desc'), limit(20));
+  cloud.unsubs.push(onSnapshot(leadsQuery, snap => {
+    const remoteLeads = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    state.leads = remoteLeads;
+    renderAdminOverview();
+  }));
 
-async function cloudBulkReplace() {
-  if (!cloudState.active) return;
-  try {
-    setCloudIndicator('syncing', 'שומר...');
-    const { doc, setDoc, deleteDoc, collection, getDocs, writeBatch } = cloudState.fns;
-    const db = cloudState.db;
-    const group = cloudState.groupCode;
-    // Delete all existing activities, then write new
-    const existing = await getDocs(collection(db, 'camps', group, 'activities'));
-    const batch = writeBatch(db);
-    existing.forEach(d => batch.delete(d.ref));
-    state.activities.forEach(a => batch.set(doc(db, 'camps', group, 'activities', a.id), a));
-    state.counselors.forEach(c => batch.set(doc(db, 'camps', group, 'counselors', c.id), {
-      id: c.id, name: c.name, gender: c.gender, vacationDates: c.vacationDates || [],
-      passwordHash: c.passwordHash || '',
-    }));
-    await batch.commit();
-    setCloudIndicator('on', 'מסונכרן');
-  } catch (e) {
-    console.error('cloudBulkReplace', e);
-    setCloudIndicator('error', 'שגיאה');
-  }
+  renderSite(); renderAdminAll();
 }
 
 function disconnectCloud() {
-  if (cloudState.unsubCounselors) cloudState.unsubCounselors();
-  if (cloudState.unsubActivities) cloudState.unsubActivities();
-  if (cloudState.unsubNotifications) cloudState.unsubNotifications();
-  cloudState = {
-    active: false, db: null, groupCode: null,
-    unsubCounselors: null, unsubActivities: null, unsubNotifications: null,
-    applyingRemote: false, fns: null, counselorWriteTimers: {},
-    pageLoadedAt: Date.now(),
-    clientId: cloudState.clientId,
-  };
+  cloud.unsubs.forEach(u => u());
+  cloud.unsubs = [];
+  cloud.active = false;
+  cloud.db = null;
   localStorage.removeItem(CLOUD_CFG_KEY);
-  localStorage.removeItem(CLOUD_GROUP_KEY);
-  setCloudIndicator('off', 'סנכרון');
+  renderCloudPanel();
 }
 
-// ---- Cloud UI ----
-document.getElementById('btn-cloud').addEventListener('click', () => {
-  showCloudModal();
-});
-document.getElementById('btn-close-cloud').addEventListener('click', () => closeCloudModal());
-document.getElementById('cloud-overlay').addEventListener('click', e => {
-  if (e.target === e.currentTarget) closeCloudModal();
-});
-
-function showCloudModal() {
-  const overlay = document.getElementById('cloud-overlay');
-  const connectedView = document.getElementById('cloud-connected-view');
-  const setupView = document.getElementById('cloud-setup-view');
-  const statusEl = document.getElementById('cloud-status-display');
-
-  if (cloudState.active) {
-    connectedView.hidden = false;
-    setupView.hidden = true;
-    document.getElementById('cloud-group-display').value = cloudState.groupCode;
-    statusEl.className = 'warning-box success';
-    statusEl.innerHTML = '✅ מחובר לענן — שינויים מסתנכרנים אוטומטית עם כל מי שמזין את אותו קוד קבוצה.';
-  } else {
-    connectedView.hidden = true;
-    setupView.hidden = false;
-    statusEl.className = 'warning-box info';
-    statusEl.innerHTML = '💡 סנכרון בענן מאפשר ל-4 המדריכים לראות את אותם נתונים מכל מכשיר. הגדרה חד-פעמית.';
-    // Pre-fill with previous values
-    const cfg = localStorage.getItem(CLOUD_CFG_KEY);
-    const code = localStorage.getItem(CLOUD_GROUP_KEY);
-    if (cfg) document.getElementById('cloud-config-input').value = cfg;
-    if (code) document.getElementById('cloud-group-input').value = code;
-  }
-  overlay.classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
+function cloudWriteSite() {
+  if (!cloud.active || cloud.applyingRemote) return;
+  const { doc, setDoc } = cloud.fns;
+  setDoc(doc(cloud.db, 'content', 'site'), state.site).catch(e => console.error('cloudWriteSite', e));
 }
-
-function closeCloudModal() {
-  document.getElementById('cloud-overlay').classList.add('hidden');
-  document.body.style.overflow = '';
+function cloudWritePriceItem(item) {
+  if (!cloud.active) return;
+  const { doc, setDoc } = cloud.fns;
+  const order = state.prices.findIndex(p => p.id === item.id);
+  setDoc(doc(cloud.db, 'prices', item.id), { ...item, order }).catch(e => console.error('cloudWritePriceItem', e));
+}
+function cloudDeletePriceItem(id) {
+  if (!cloud.active) return;
+  const { doc, deleteDoc } = cloud.fns;
+  deleteDoc(doc(cloud.db, 'prices', id)).catch(e => console.error('cloudDeletePriceItem', e));
+}
+function cloudWriteGalleryItem(item) {
+  if (!cloud.active) return;
+  const { doc, setDoc } = cloud.fns;
+  const order = state.gallery.findIndex(g => g.id === item.id);
+  setDoc(doc(cloud.db, 'gallery', item.id), { ...item, order }).catch(e => console.error('cloudWriteGalleryItem', e));
+}
+function cloudDeleteGalleryItem(id) {
+  if (!cloud.active) return;
+  const { doc, deleteDoc } = cloud.fns;
+  deleteDoc(doc(cloud.db, 'gallery', id)).catch(e => console.error('cloudDeleteGalleryItem', e));
+}
+function cloudWriteGalleryOrder() {
+  if (!cloud.active) return;
+  const { doc, setDoc } = cloud.fns;
+  state.gallery.forEach((g, i) => {
+    setDoc(doc(cloud.db, 'gallery', g.id), { ...g, order: i }).catch(e => console.error('cloudWriteGalleryOrder', e));
+  });
+}
+function cloudLogLead(entry) {
+  if (!cloud.active) return;
+  const { doc, addDoc, collection, updateDoc, increment } = cloud.fns;
+  addDoc(collection(cloud.db, 'leads'), entry).catch(e => console.error('cloudLogLead', e));
+  updateDoc(doc(cloud.db, 'content', 'site'), { leadsTotal: increment(1) }).catch(e => console.error('cloudLogLead total', e));
 }
 
 document.getElementById('btn-connect-cloud').addEventListener('click', async () => {
-  const errorEl = document.getElementById('cloud-error');
-  errorEl.hidden = true;
-  let cfgText = document.getElementById('cloud-config-input').value.trim();
-  const groupCode = document.getElementById('cloud-group-input').value.trim();
-
-  if (!groupCode) {
-    errorEl.hidden = false;
-    errorEl.textContent = 'חסר קוד קבוצה.';
-    return;
-  }
-
+  const errEl = document.getElementById('cloud-error');
+  errEl.hidden = true;
+  const raw = document.getElementById('cloud-config-input').value.trim();
+  let cfg;
+  try { cfg = JSON.parse(raw); }
+  catch (e) { errEl.textContent = 'זה לא JSON תקין. הדביקו את כל האובייקט firebaseConfig כפי שהוא, כולל הסוגריים המסולסלים.'; errEl.hidden = false; return; }
+  if (!cfg.projectId || !cfg.apiKey) { errEl.textContent = 'חסרים שדות ב-config (נדרש לפחות apiKey ו-projectId).'; errEl.hidden = false; return; }
   try {
-    // Allow JS-style config (with unquoted keys) by extracting via regex
-    if (!cfgText.startsWith('{')) throw new Error('הקונפיג חייב להתחיל ב-{');
-    let cfg;
-    try {
-      cfg = JSON.parse(cfgText);
-    } catch (e) {
-      // Try to convert JS object literal to JSON
-      const fixed = cfgText
-        .replace(/(\w+):/g, '"$1":')
-        .replace(/'/g, '"')
-        .replace(/,(\s*[}\]])/g, '$1');
-      cfg = JSON.parse(fixed);
-    }
-    if (!cfg.apiKey || !cfg.projectId) throw new Error('קונפיג לא תקין — חסר apiKey או projectId');
-
-    localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cfg));
-    localStorage.setItem(CLOUD_GROUP_KEY, groupCode);
-    await initCloud();
-    if (cloudState.active) {
-      closeCloudModal();
-      alert('✅ חובר בהצלחה! שתף את קוד הקבוצה "' + groupCode + '" עם 3 המדריכים האחרים.');
-    } else {
-      errorEl.hidden = false;
-      errorEl.textContent = 'החיבור נכשל. בדוק את הקונפיג ונסה שוב.';
-    }
-  } catch (err) {
-    errorEl.hidden = false;
-    errorEl.textContent = 'שגיאה: ' + err.message;
+    await connectCloud(cfg);
+  } catch (e) {
+    console.error(e);
+    errEl.textContent = 'ההתחברות נכשלה. ודאו שה-config תקין ושיצרתם Firestore Database בפרויקט (במצב Test mode).';
+    errEl.hidden = false;
   }
 });
 
 document.getElementById('btn-disconnect-cloud').addEventListener('click', () => {
-  if (!confirm('להתנתק מהסנכרון? הנתונים יישארו במכשיר הזה אבל לא יסתנכרנו יותר.')) return;
-  disconnectCloud();
-  closeCloudModal();
+  if (confirm('לנתק את הסנכרון בענן? השינויים ימשיכו להישמר בדפדפן הזה בלבד.')) disconnectCloud();
 });
 
-document.getElementById('btn-copy-group-code').addEventListener('click', () => {
-  navigator.clipboard.writeText(cloudState.groupCode || '').then(() => {
-    const btn = document.getElementById('btn-copy-group-code');
-    const old = btn.textContent;
-    btn.textContent = '✓ הועתק';
-    setTimeout(() => btn.textContent = old, 1500);
-  });
+async function initCloudFromSaved() {
+  const raw = localStorage.getItem(CLOUD_CFG_KEY);
+  if (!raw) return;
+  try { await connectCloud(JSON.parse(raw)); }
+  catch (e) { console.error('auto cloud connect failed', e); }
+}
+
+// ---------------- Nav toggle ----------------
+document.getElementById('nav-toggle').addEventListener('click', () => {
+  const nav = document.querySelector('.main-nav');
+  const open = nav.classList.toggle('open');
+  document.getElementById('nav-toggle').setAttribute('aria-expanded', String(open));
+});
+document.querySelectorAll('.main-nav a').forEach(a => {
+  a.addEventListener('click', () => document.querySelector('.main-nav').classList.remove('open'));
 });
 
-// ---------------- First-time onboarding & boot ----------------
-// We intentionally do NOT auto-route any returning user to the original shared
-// group "main" — that's the privacy leak this whole feature exists to close.
-// Every visitor without an explicit CLOUD_GROUP_KEY goes through onboarding.
-// Members of the original team enter the code "main" once per device to
-// re-attach to their existing data; everyone else creates a fresh team.
+// ---------------- Boot ----------------
+window.addEventListener('hashchange', handleRoute);
 
-function showOnboardingStep(name) {
-  document.querySelectorAll('#onboarding-overlay .onb-step').forEach(el => el.hidden = true);
-  const step = document.getElementById('onb-' + name);
-  if (step) step.hidden = false;
-}
-
-function showOnboarding() {
-  document.getElementById('onboarding-overlay').classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
-  showOnboardingStep('welcome');
-}
-
-function hideOnboarding() {
-  document.getElementById('onboarding-overlay').classList.add('hidden');
-  document.body.style.overflow = '';
-}
-
-function generateGroupCode() {
-  return 'team-' + Math.random().toString(36).slice(2, 8);
-}
-
-function buildOnboardingCounselorsList(count) {
-  const wrap = document.getElementById('onb-counselors');
-  wrap.innerHTML = '';
-  for (let i = 0; i < count; i++) {
-    const male = i < Math.ceil(count / 2);
-    const row = document.createElement('div');
-    row.className = 'onb-counselor-row';
-    row.innerHTML = `
-      <label style="margin:0">שם:
-        <input type="text" class="onb-name" placeholder="${male ? 'מדריך' : 'מדריכה'} ${i + 1}">
-      </label>
-      <label style="margin:0">מגדר:
-        <select class="onb-gender">
-          <option value="M" ${male ? 'selected' : ''}>זכר</option>
-          <option value="F" ${male ? '' : 'selected'}>נקבה</option>
-        </select>
-      </label>
-    `;
-    wrap.appendChild(row);
-  }
-}
-
-function createNewTeam() {
-  const rows = document.querySelectorAll('#onb-counselors .onb-counselor-row');
-  if (rows.length === 0) { alert('יש להזין לפחות מדריך אחד'); return; }
-  const counselors = [];
-  rows.forEach((row, i) => {
-    const nameInput = row.querySelector('.onb-name');
-    const genderSel = row.querySelector('.onb-gender');
-    const name = (nameInput.value.trim() || nameInput.placeholder || 'מדריך ' + (i + 1));
-    counselors.push({
-      id: 'c' + (i + 1),
-      name,
-      gender: genderSel.value,
-      vacationDates: [],
-      passwordHash: '',
-    });
-  });
-  const groupCode = generateGroupCode();
-  state.counselors = counselors;
-  state.activities = [];
-  saveState();
-  localStorage.setItem(CLOUD_GROUP_KEY, groupCode);
-  // Mark the local reset as already applied so it won't fire on fresh data.
-  localStorage.setItem(LOCAL_RESET_KEY, RESET_TOKEN);
-  document.getElementById('onb-code-display').textContent = groupCode;
-  showOnboardingStep('done');
-}
-
-async function validateGroupExists(code) {
-  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
-  const { getFirestore, collection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js');
-  const app = initializeApp(DEFAULT_FIREBASE_CONFIG, 'join-check');
-  const db = getFirestore(app);
-  const snap = await getDocs(collection(db, 'camps', code, 'counselors'));
-  return !snap.empty;
-}
-
-async function joinExistingTeam() {
-  const code = document.getElementById('onb-group-code').value.trim();
-  const errEl = document.getElementById('onb-join-error');
-  const btn = document.getElementById('onb-do-join');
-  errEl.hidden = true;
-  if (!code) { errEl.hidden = false; errEl.textContent = 'יש להזין קוד צוות.'; return; }
-  const origText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'בודק...';
-  try {
-    const exists = await validateGroupExists(code);
-    if (!exists) {
-      errEl.hidden = false;
-      errEl.textContent = `❌ הקוד "${code}" לא קיים. בדוק/י שוב.`;
-      return;
-    }
-  } catch (e) {
-    console.error('join validate failed', e);
-    errEl.hidden = false;
-    errEl.textContent = '❌ שגיאת רשת. נסה/י שוב.';
-    return;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = origText;
-  }
-  // Leave the local team empty so we don't seed defaults into the joined group.
-  state.counselors = [];
-  state.activities = [];
-  saveState();
-  localStorage.setItem(CLOUD_GROUP_KEY, code);
-  localStorage.setItem(LOCAL_RESET_KEY, RESET_TOKEN);
-  hideOnboarding();
-  initRender();
-  initCloud();
-}
-
-function finishOnboarding() {
-  hideOnboarding();
-  initRender();
-  initCloud();
-}
-
-function wireOnboarding() {
-  document.getElementById('onb-new').addEventListener('click', () => {
-    showOnboardingStep('new-form');
-    buildOnboardingCounselorsList(+document.getElementById('onb-count').value || 4);
-  });
-  document.getElementById('onb-join').addEventListener('click', () => showOnboardingStep('join-form'));
-  document.getElementById('onb-back-1').addEventListener('click', () => showOnboardingStep('welcome'));
-  document.getElementById('onb-back-2').addEventListener('click', () => showOnboardingStep('welcome'));
-  document.getElementById('onb-count').addEventListener('input', e => {
-    const n = Math.max(1, Math.min(10, +e.target.value || 4));
-    buildOnboardingCounselorsList(n);
-  });
-  document.getElementById('onb-create').addEventListener('click', createNewTeam);
-  document.getElementById('onb-do-join').addEventListener('click', joinExistingTeam);
-  document.getElementById('onb-finish').addEventListener('click', finishOnboarding);
-  document.getElementById('onb-copy-code').addEventListener('click', () => {
-    const code = document.getElementById('onb-code-display').textContent;
-    navigator.clipboard.writeText(code).then(() => {
-      const btn = document.getElementById('onb-copy-code');
-      const orig = btn.textContent;
-      btn.textContent = '✓ הועתק';
-      setTimeout(() => btn.textContent = orig, 1500);
-    });
-  });
-}
-
-function boot() {
-  applyLocalVacationReset();
-  wireOnboarding();
-  startMainCountdown();
-  if (!localStorage.getItem(CLOUD_GROUP_KEY)) {
-    showOnboarding();
-    return;
-  }
-  initRender();
-  initCloud();
-}
-
-boot();
-
-// ---------------- PWA Service Worker ----------------
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
-  });
-}
+(async function init() {
+  await ensureDefaultPassword();
+  renderSite();
+  wireLeadButtons();
+  handleRoute();
+  initCloudFromSaved();
+})();
