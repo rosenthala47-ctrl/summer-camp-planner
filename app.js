@@ -714,14 +714,24 @@ function cloudLogLead(entry) {
   updateDoc(doc(cloud.db, 'content', 'site'), { leadsTotal: increment(1) }).catch(e => console.error('cloudLogLead total', e));
 }
 
+function parseFirebaseConfigInput(raw) {
+  try { return JSON.parse(raw); } catch (e) { /* Firebase's own console outputs a JS object
+    literal (unquoted keys), not strict JSON - fall through and accept that too, since this
+    box only ever receives the admin's own pasted config, never untrusted input. */ }
+  const namedMatch = raw.match(/firebaseConfig\s*=\s*(\{[\s\S]*?\})\s*;/);
+  const objText = namedMatch ? namedMatch[1] : (raw.match(/\{[\s\S]*\}/) || [])[0];
+  if (!objText) throw new Error('no object literal found in input');
+  return Function('"use strict"; return (' + objText + ');')();
+}
+
 document.getElementById('btn-connect-cloud').addEventListener('click', async () => {
   const errEl = document.getElementById('cloud-error');
   errEl.hidden = true;
   const raw = document.getElementById('cloud-config-input').value.trim();
   let cfg;
-  try { cfg = JSON.parse(raw); }
-  catch (e) { errEl.textContent = 'זה לא JSON תקין. הדביקו את כל האובייקט firebaseConfig כפי שהוא, כולל הסוגריים המסולסלים.'; errEl.hidden = false; return; }
-  if (!cfg.projectId || !cfg.apiKey) { errEl.textContent = 'חסרים שדות ב-config (נדרש לפחות apiKey ו-projectId).'; errEl.hidden = false; return; }
+  try { cfg = parseFirebaseConfigInput(raw); }
+  catch (e) { errEl.textContent = 'לא הצלחתי לקרוא את הקוד שהודבק. הדביקו את כל קטע הקוד מ-Firebase (או לפחות את אובייקט firebaseConfig, כולל הסוגריים המסולסלים).'; errEl.hidden = false; return; }
+  if (!cfg || !cfg.projectId || !cfg.apiKey) { errEl.textContent = 'חסרים שדות ב-config (נדרש לפחות apiKey ו-projectId).'; errEl.hidden = false; return; }
   try {
     await connectCloud(cfg);
   } catch (e) {
