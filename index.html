@@ -3,296 +3,316 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>מתכנן חופש גדול</title>
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="חופש גדול">
-<meta name="theme-color" content="#2563eb">
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-192.png">
+<title id="page-title">יד ועץ | אמנות עץ ומזוזות בעבודת יד</title>
+<meta id="meta-description" name="description" content="סטודיו לאמנות עץ בעבודת יד — מזוזות, תבליטים ומתנות בהתאמה אישית. הזמנה מהירה בוואטסאפ.">
+<meta name="theme-color" content="#3E2A1B">
+<meta property="og:type" content="business.business">
+<meta id="og-title" property="og:title" content="יד ועץ | אמנות עץ ומזוזות בעבודת יד">
+<meta id="og-description" property="og:description" content="מזוזות, תבליטים ומתנות עץ בעבודת יד — כל יצירה מיוחדת כמו העץ שממנו נולדה.">
+<meta property="og:locale" content="he_IL">
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script type="application/ld+json" id="ld-json">
+{
+  "@context": "https://schema.org",
+  "@type": "Store",
+  "name": "יד ועץ",
+  "description": "סטודיו לאמנות עץ בעבודת יד — מזוזות, תבליטים ומתנות בהתאמה אישית.",
+  "priceRange": "₪₪",
+  "areaServed": "IL"
+}
+</script>
 </head>
 <body>
-<header>
-  <h1>🌞 מתכנן חופש גדול</h1>
-  <p class="subtitle">תכנון פעילויות לחניכים — 18.6.2026 עד 26.8.2026</p>
-  <div id="main-countdown" class="header-countdown" hidden></div>
-  <div class="header-actions">
-    <button id="btn-cloud" class="link-btn" title="סנכרון בענן">
-      <span id="cloud-icon">☁️</span> <span id="cloud-label">סנכרון</span>
-      <span id="cloud-dot" class="cloud-dot off"></span>
+
+<!-- ============ SITE HEADER ============ -->
+<header class="site-header" id="site-header">
+  <div class="header-inner">
+    <a href="#top" class="brand" id="brand-block">
+      <img id="brand-logo" class="brand-logo" alt="" hidden>
+      <span class="brand-logo-fallback" id="brand-logo-fallback">יע</span>
+      <span class="brand-name" id="brand-name-header">יד ועץ</span>
+    </a>
+    <nav class="main-nav" aria-label="ניווט ראשי">
+      <a href="#about">הסיפור שלנו</a>
+      <a href="#gallery">עבודות</a>
+      <a href="#prices">מחירון</a>
+      <a href="#contact">יצירת קשר</a>
+    </nav>
+    <a class="btn btn-cta header-cta" id="cta-header" data-lead-place="header">
+      <svg viewBox="0 0 24 24" class="icon-wa" aria-hidden="true"><path d="M17.5 14.4c-.3-.1-1.7-.8-1.9-.9-.3-.1-.4-.1-.6.1-.2.3-.7.9-.8 1-.2.2-.3.2-.5.1-.3-.1-1.2-.4-2.2-1.4-.8-.7-1.4-1.6-1.5-1.9-.2-.3 0-.5.1-.6l.4-.5c.1-.1.2-.3.2-.4.1-.1 0-.3 0-.4-.1-.1-.6-1.4-.8-1.9-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.3-.8.8-.8 1.9s.8 2.2.9 2.4c.1.2 1.6 2.5 4 3.4.6.2 1 .4 1.3.5.5.2 1 .1 1.4.1.4-.1 1.3-.5 1.5-1 .2-.5.2-1 .1-1.1-.1-.1-.2-.1-.4-.2z"></path><path d="M12 2C6.5 2 2 6.4 2 11.8c0 1.9.5 3.6 1.5 5.2L2 22l5.2-1.4c1.5.8 3.2 1.3 5 1.3 5.5 0 10-4.4 10-9.9C22 6.4 17.5 2 12 2zm0 18c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-3.1.8.8-3-.2-.3C4 14.7 3.6 13.3 3.6 11.8c0-4.6 3.8-8.4 8.4-8.4s8.4 3.7 8.4 8.4c0 4.6-3.8 8.2-8.4 8.2z"></path></svg>
+      <span>הזמינו עכשיו</span>
+    </a>
+    <button class="nav-toggle" id="nav-toggle" aria-label="פתיחת תפריט" aria-expanded="false">
+      <span></span><span></span><span></span>
     </button>
-    <button id="btn-export" class="link-btn">📤 ייצוא נתונים</button>
-    <button id="btn-import" class="link-btn">📥 ייבוא נתונים</button>
-    <input type="file" id="import-file" accept=".json" hidden>
   </div>
 </header>
 
-<nav class="tabs">
-  <button class="tab active" data-tab="counselors">👥 מדריכים</button>
-  <button class="tab" data-tab="vacations">🏖️ חופשות מדריכים</button>
-  <button class="tab" data-tab="activities">🎯 פעילויות</button>
-  <button class="tab" data-tab="calendar">📅 לוח קיץ</button>
-</nav>
+<main id="top">
 
-<main>
-  <!-- Counselors tab -->
-  <section id="tab-counselors" class="tab-content active">
-    <h2>הגדרת המדריכים</h2>
-    <p class="hint">הזן/י את שמות המדריכים בצוות ואת המגדר של כל אחד. כל מדריך/ה מגדיר/ה <b>סיסמה אישית</b> — ורק הוא/היא יכול/ה לערוך את ימי אי-הזמינות של עצמו/ה בלשונית "חופשות מדריכים".<br><b style="color:var(--danger)">⚠️ חשוב מאוד לזכור את הסיסמה! אין אפשרות לאפס סיסמה שנשכחה.</b></p>
-    <div id="counselors-list"></div>
-  </section>
-
-  <!-- Vacations tab -->
-  <section id="tab-vacations" class="tab-content">
-    <h2>חופשות וימים שאין אפשרות</h2>
-    <p class="hint">בחר/י את השם שלך, הזן/י את הסיסמה שלך, ואז סמן/י תאריכים שבהם אינך יכול/ה. לחיצה נוספת מבטלת. אפשר לערוך רק את הימים של עצמך.</p>
-    <div class="counselor-selector">
-      <label>מדריך/ה:</label>
-      <select id="vacation-counselor-select"></select>
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <svg class="hero-grain" viewBox="0 0 1200 500" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0,60 C 200,120 400,10 600,70 S 1000,130 1200,60" />
+      <path d="M0,140 C 220,190 380,90 600,150 S 980,210 1200,140" />
+      <path d="M0,230 C 240,270 420,180 600,235 S 960,290 1200,230" />
+      <path d="M0,320 C 260,360 440,270 600,320 S 940,370 1200,320" />
+      <path d="M0,410 C 280,445 460,365 600,405 S 920,450 1200,410" />
+    </svg>
+    <div class="hero-inner">
+      <p class="eyebrow">סטודיו משפחתי לאמנות עץ · בעבודת יד</p>
+      <h1 id="hero-name">יד ועץ</h1>
+      <p class="hero-tagline" id="hero-tagline">מזוזות, תבליטים ומתנות עץ — כל יצירה מתחילה בגזע אחד, ומסתיימת בפריט שילווה את הבית שלכם לדורות.</p>
+      <div class="hero-actions">
+        <a class="btn btn-cta btn-lg" id="cta-hero" data-lead-place="hero">
+          <svg viewBox="0 0 24 24" class="icon-wa" aria-hidden="true"><use href="#"></use><path d="M17.5 14.4c-.3-.1-1.7-.8-1.9-.9-.3-.1-.4-.1-.6.1-.2.3-.7.9-.8 1-.2.2-.3.2-.5.1-.3-.1-1.2-.4-2.2-1.4-.8-.7-1.4-1.6-1.5-1.9-.2-.3 0-.5.1-.6l.4-.5c.1-.1.2-.3.2-.4.1-.1 0-.3 0-.4-.1-.1-.6-1.4-.8-1.9-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.3-.8.8-.8 1.9s.8 2.2.9 2.4c.1.2 1.6 2.5 4 3.4.6.2 1 .4 1.3.5.5.2 1 .1 1.4.1.4-.1 1.3-.5 1.5-1 .2-.5.2-1 .1-1.1-.1-.1-.2-.1-.4-.2z"></path><path d="M12 2C6.5 2 2 6.4 2 11.8c0 1.9.5 3.6 1.5 5.2L2 22l5.2-1.4c1.5.8 3.2 1.3 5 1.3 5.5 0 10-4.4 10-9.9C22 6.4 17.5 2 12 2zm0 18c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-3.1.8.8-3-.2-.3C4 14.7 3.6 13.3 3.6 11.8c0-4.6 3.8-8.4 8.4-8.4s8.4 3.7 8.4 8.4c0 4.6-3.8 8.2-8.4 8.2z"></path></svg>
+          הזמינו עכשיו בוואטסאפ
+        </a>
+        <a class="btn btn-ghost btn-lg" href="#gallery">צפו בעבודות</a>
+      </div>
     </div>
-    <div id="vacation-auth"></div>
-    <div id="vacation-calendar"></div>
   </section>
 
-  <!-- Activities tab -->
-  <section id="tab-activities" class="tab-content">
-    <h2>פעילויות החופש</h2>
-    <p class="hint">הוסף פעילות — תאריך התחלה, מספר ימים, וסוג (כל המחנה / טיול בנים / טיול בנות / מפוצל). האפליקציה תזהיר אם יש מדריך שלא יכול באותם ימים.</p>
-
-    <form id="activity-form" class="card">
-      <input type="hidden" id="activity-id">
-      <div class="form-row">
-        <label>שם הפעילות:
-          <input type="text" id="activity-name" required placeholder="למשל: טיול לכנרת">
-        </label>
-        <label>תאריך התחלה:
-          <input type="date" id="activity-date" min="2026-06-18" max="2026-08-26" required>
-        </label>
-        <label>מספר ימים:
-          <input type="number" id="activity-days" min="1" max="70" value="1" required>
-        </label>
+  <!-- ============ ABOUT ============ -->
+  <section class="section" id="about">
+    <div class="section-inner about-grid">
+      <div class="about-copy">
+        <p class="eyebrow">הסיפור שלנו</p>
+        <h2>כל חתיכת עץ מספרת סיפור אחר</h2>
+        <p class="about-text" id="about-text">כל יצירה מתחילה בגזע עץ אחד ומסתיימת בפריט שילווה את הבית שלכם לדורות. במשך שנים אני מעצב ומגלף מזוזות, תבליטים ומזכרות בעבודת יד — ממבחר עצי זית, אלון ואגוז. כל חתיכה שונה, וכל מזוזה מקבלת את הגימור המתאים לה.</p>
       </div>
-      <div class="form-row">
-        <label>סוג הפעילות:
-          <select id="activity-type" required>
-            <option value="all">כל המחנה — כל 4 המדריכים נוכחים</option>
-            <option value="split">מפוצל לפי מגדר — כולם נוכחים (בנים עם המדריכים, בנות עם המדריכות)</option>
-            <option value="boys">בנים בלבד — צריך 2 מדריכים (בנים)</option>
-            <option value="girls">בנות בלבד — צריך 2 מדריכות (בנות)</option>
-          </select>
-        </label>
-        <label>הערות (אופציונלי):
-          <input type="text" id="activity-notes" placeholder="כל מידע נוסף">
-        </label>
-      </div>
-      <div class="form-row">
-        <label class="checkbox-label">
-          <input type="checkbox" id="activity-in-board" checked>
-          <span>🗓️ להציג את הפעילות בלוח לחניכים (הלוח ששולחים אליהם)</span>
-        </label>
-      </div>
-      <div class="form-row">
-        <button type="submit" class="primary">💾 שמור פעילות</button>
-        <button type="button" id="activity-cancel" class="secondary" hidden>ביטול</button>
-        <button type="button" id="activity-suggest" class="secondary">💡 הצע תאריך פנוי</button>
-      </div>
-      <div id="activity-warning"></div>
-    </form>
-
-    <h3>פעילויות שהוזנו</h3>
-    <div id="activities-list"></div>
-  </section>
-
-  <!-- Calendar tab -->
-  <section id="tab-calendar" class="tab-content">
-    <h2>לוח הקיץ</h2>
-    <p class="hint">תצוגת כל הקיץ. כל יום מציג: מי לא נוכח (אם יש), והפעילות שתוכננה (אם יש). אדום = קונפליקט.</p>
-    <div class="legend">
-      <span class="legend-item"><span class="dot dot-free"></span>פנוי</span>
-      <span class="legend-item"><span class="dot dot-activity"></span>פעילות מתוכננת</span>
-      <span class="legend-item"><span class="dot dot-unavail"></span>מדריך בחופש</span>
-      <span class="legend-item"><span class="dot dot-conflict"></span>קונפליקט</span>
+      <ul class="about-highlights">
+        <li><span class="hl-num">100%</span><span>עבודת יד, ללא ייצור המוני</span></li>
+        <li><span class="hl-num">✎</span><span>עיצוב וחריטה בהתאמה אישית</span></li>
+        <li><span class="hl-num">🕊</span><span>כשר למהדרין, בהתייעצות עם רב</span></li>
+        <li><span class="hl-num">🎁</span><span>אריזת מתנה מוקפדת לכל הזמנה</span></li>
+      </ul>
     </div>
-    <div id="summary-stats" class="stats"></div>
-    <div id="summer-calendar"></div>
   </section>
+
+  <!-- ============ GALLERY ============ -->
+  <section class="section section-alt" id="gallery">
+    <div class="section-inner">
+      <p class="eyebrow">מהסדנה</p>
+      <h2>עבודות נבחרות</h2>
+      <div class="gallery-grid" id="gallery-grid"></div>
+    </div>
+  </section>
+
+  <!-- ============ PRICES ============ -->
+  <section class="section" id="prices">
+    <div class="section-inner">
+      <p class="eyebrow">מחירון</p>
+      <h2>מה אפשר להזמין</h2>
+      <p class="section-note">המחירים משתנים בהתאם לסוג העץ, הגודל והתוספות. לקבלת הצעת מחיר מדויקת — כתבו לנו בוואטסאפ.</p>
+      <ul class="price-list" id="price-list"></ul>
+    </div>
+  </section>
+
+  <!-- ============ CONTACT / CTA ============ -->
+  <section class="section section-contact" id="contact">
+    <div class="section-inner contact-grid">
+      <div>
+        <p class="eyebrow">יצירת קשר</p>
+        <h2>בואו נדבר על היצירה שלכם</h2>
+        <p class="section-note">ספרו לנו מה חשבתם — סוג העץ, הגודל והשימוש — ונחזור אליכם עם הצעת מחיר.</p>
+        <a class="btn btn-cta btn-lg" id="cta-contact" data-lead-place="contact">
+          <svg viewBox="0 0 24 24" class="icon-wa" aria-hidden="true"><path d="M17.5 14.4c-.3-.1-1.7-.8-1.9-.9-.3-.1-.4-.1-.6.1-.2.3-.7.9-.8 1-.2.2-.3.2-.5.1-.3-.1-1.2-.4-2.2-1.4-.8-.7-1.4-1.6-1.5-1.9-.2-.3 0-.5.1-.6l.4-.5c.1-.1.2-.3.2-.4.1-.1 0-.3 0-.4-.1-.1-.6-1.4-.8-1.9-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.3-.8.8-.8 1.9s.8 2.2.9 2.4c.1.2 1.6 2.5 4 3.4.6.2 1 .4 1.3.5.5.2 1 .1 1.4.1.4-.1 1.3-.5 1.5-1 .2-.5.2-1 .1-1.1-.1-.1-.2-.1-.4-.2z"></path><path d="M12 2C6.5 2 2 6.4 2 11.8c0 1.9.5 3.6 1.5 5.2L2 22l5.2-1.4c1.5.8 3.2 1.3 5 1.3 5.5 0 10-4.4 10-9.9C22 6.4 17.5 2 12 2zm0 18c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-3.1.8.8-3-.2-.3C4 14.7 3.6 13.3 3.6 11.8c0-4.6 3.8-8.4 8.4-8.4s8.4 3.7 8.4 8.4c0 4.6-3.8 8.2-8.4 8.2z"></path></svg>
+          שלחו הודעה בוואטסאפ
+        </a>
+      </div>
+      <div class="contact-details" id="contact-details">
+        <div class="contact-row" id="row-phone" hidden><span class="ci">📞</span><span id="contact-phone"></span></div>
+        <div class="contact-row" id="row-address" hidden><span class="ci">📍</span><span id="contact-address"></span></div>
+        <div class="contact-row" id="row-hours" hidden><span class="ci">🕒</span><span id="contact-hours"></span></div>
+        <div class="contact-row" id="row-instagram" hidden><span class="ci">📷</span><a id="contact-instagram" target="_blank" rel="noopener"></a></div>
+      </div>
+    </div>
+  </section>
+
 </main>
 
-<!-- Floating update-board button -->
-<button id="btn-update-board" class="fab" title="עדכן לוח חופש">
-  🗓️ עדכן לוח
-</button>
-
-<!-- Cloud Sync Modal -->
-<div id="cloud-overlay" class="board-overlay hidden">
-  <div class="board-modal" style="max-width:640px">
-    <div class="board-toolbar">
-      <h3 style="margin:0;flex:1;font-size:18px">☁️ סנכרון בענן (Firebase)</h3>
-      <button id="btn-close-cloud" class="secondary">✕ סגור</button>
-    </div>
-    <div style="padding:24px">
-      <div id="cloud-status-display" class="warning-box info" style="margin-bottom:18px"></div>
-
-      <div id="cloud-connected-view" hidden>
-        <h4 style="margin-bottom:8px">🟢 מחובר</h4>
-        <p style="color:var(--muted);margin-bottom:14px">כל שינוי מסתנכרן אוטומטית עם 4 המדריכים.</p>
-        <div class="form-row">
-          <label>קוד הקבוצה:
-            <input type="text" id="cloud-group-display" readonly style="font-family:monospace;background:#f1f5f9">
-          </label>
-        </div>
-        <button id="btn-copy-group-code" class="secondary">📋 העתק קוד</button>
-        <button id="btn-disconnect-cloud" class="danger" style="margin-right:10px">🔌 התנתק</button>
-        <p style="margin-top:16px;font-size:13px;color:var(--muted)">
-          שלח את קוד הקבוצה ל-3 המדריכים האחרים. הם יזינו אותו בטלפון שלהם וכל השינויים יסתנכרנו בזמן אמת.
-        </p>
-      </div>
-
-      <div id="cloud-setup-view">
-        <details style="margin-bottom:18px" open>
-          <summary style="cursor:pointer;font-weight:700;font-size:15px;padding:8px 0">📖 איך מקימים פרויקט Firebase (פעם אחת, חינם, 5 דקות)</summary>
-          <ol style="padding-right:20px;line-height:1.9;font-size:14px">
-            <li>נכנסים ל-<a href="https://console.firebase.google.com/" target="_blank">console.firebase.google.com</a> (עם חשבון Google).</li>
-            <li>לוחצים <b>Add project</b> → שם: <code>summer-camp-planner</code> → ממשיכים (אפשר לדלג על Google Analytics).</li>
-            <li>אחרי שהפרויקט נוצר, בתפריט הצד: <b>Build → Firestore Database → Create database</b>.</li>
-            <li>בוחרים <b>Start in test mode</b> → אזור <code>europe-west</code> → Enable.</li>
-            <li>חוזרים ל-<b>Project settings</b> (גלגל שיניים למעלה) → <b>General</b> → גוללים למטה ל-<b>Your apps</b> → לוחצים על אייקון ה-<b>Web (&lt;/&gt;)</b>.</li>
-            <li>נותנים כינוי לאפליקציה → <b>Register app</b>.</li>
-            <li>מעתיקים את אובייקט <code>firebaseConfig</code> שמופיע (החלק שמתחיל ב-<code>{ apiKey: "...", ... }</code>) ומדביקים פה למטה.</li>
-          </ol>
-        </details>
-
-        <div class="form-row">
-          <label style="grid-column:1/-1">הדבק כאן את firebaseConfig (כולל הסוגריים):
-            <textarea id="cloud-config-input" rows="9" style="font-family:monospace;font-size:12px;padding:10px;direction:ltr;text-align:left" placeholder='{
-  "apiKey": "AIza...",
-  "authDomain": "...",
-  "projectId": "...",
-  "storageBucket": "...",
-  "messagingSenderId": "...",
-  "appId": "..."
-}'></textarea>
-          </label>
-        </div>
-
-        <div class="form-row">
-          <label>קוד קבוצה (יוצרים פעם אחת ומשתפים עם המדריכים):
-            <input type="text" id="cloud-group-input" placeholder="למשל: kayitz-tzofim-2026" autocomplete="off">
-          </label>
-        </div>
-
-        <div id="cloud-error" class="warning-box danger" hidden></div>
-
-        <button id="btn-connect-cloud" class="primary" style="width:100%;margin-top:12px">☁️ התחבר וסנכרן</button>
-      </div>
-    </div>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span id="footer-name">יד ועץ</span>
+    <a href="#admin-gate" id="footer-admin-link">ניהול</a>
   </div>
-</div>
-
-<!-- Vacation Conflict Modal -->
-<div id="vacation-conflict-overlay" class="board-overlay hidden">
-  <div class="board-modal" style="max-width:560px">
-    <div class="board-toolbar">
-      <h3 style="margin:0;flex:1;font-size:18px">⚠️ קונפליקט עם פעילות מתוכננת</h3>
-    </div>
-    <div style="padding:24px">
-      <div id="vacation-conflict-body" style="margin-bottom:20px"></div>
-      <div class="form-row" style="display:flex;gap:10px;flex-wrap:wrap">
-        <button id="btn-conflict-move" class="primary" style="flex:1;min-width:200px">
-          📅 הזז פעילויות + שלח הודעה
-        </button>
-        <button id="btn-conflict-anyway" class="secondary" style="flex:1;min-width:180px;background:#fef3c7;color:#92400e;border-color:#f59e0b">
-          ✋ קבע חופשה בכל זאת
-        </button>
-        <button id="btn-conflict-cancel" class="secondary" style="flex:1;min-width:140px">
-          ❌ ביטול השינוי
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Toast notifications container -->
-<div id="toast-container"></div>
-
-<!-- Schedule Board Modal -->
-<div id="board-overlay" class="board-overlay hidden">
-  <div class="board-modal">
-    <div class="board-toolbar no-print">
-      <button id="btn-print-board" class="primary">🖨️ הדפס / שמור PDF</button>
-      <button id="btn-close-board" class="secondary">✕ סגור</button>
-    </div>
-    <div id="board-content"></div>
-  </div>
-</div>
-
-<!-- First-time onboarding overlay -->
-<div id="onboarding-overlay" class="board-overlay hidden">
-  <div class="board-modal" style="max-width:560px">
-    <div id="onb-welcome" class="onb-step" hidden>
-      <h2 style="margin-bottom:8px">🌞 ברוכים הבאים!</h2>
-      <p style="color:var(--muted);margin-bottom:18px">
-        מתכנן חופש גדול עוזר לצוות מדריכים לתכנן את פעילויות הקיץ
-        תוך התחשבות בימים שכל מדריך/ה לא יכול/ה.
-      </p>
-      <p style="margin-bottom:14px;font-weight:700">איך תרצה/י להתחיל?</p>
-      <div class="onb-actions">
-        <button id="onb-new" class="primary onb-big">➕ צוות חדש</button>
-        <button id="onb-join" class="secondary onb-big">🔗 הצטרף לצוות קיים</button>
-      </div>
-      <p class="hint" style="margin-top:16px;font-size:13px">
-        כבר השתמשת באפליקציה בעבר? בחר/י "הצטרף לצוות קיים" עם הקוד שקיבלת.
-      </p>
-    </div>
-
-    <div id="onb-new-form" class="onb-step" hidden>
-      <h2 style="margin-bottom:8px">צוות חדש</h2>
-      <p class="hint" style="margin-bottom:14px">הזן/י את שמות המדריכים בצוות. אפשר יהיה לערוך אחר כך.</p>
-      <label>כמה מדריכים בצוות?
-        <input type="number" id="onb-count" min="1" max="10" value="4">
-      </label>
-      <div id="onb-counselors" style="margin-top:14px"></div>
-      <div class="onb-actions" style="margin-top:18px">
-        <button id="onb-create" class="primary">✓ צור צוות והתחל</button>
-        <button id="onb-back-1" class="secondary">חזרה</button>
-      </div>
-    </div>
-
-    <div id="onb-join-form" class="onb-step" hidden>
-      <h2 style="margin-bottom:8px">הצטרף לצוות קיים</h2>
-      <p class="hint" style="margin-bottom:14px">הזן/י את קוד הצוות שקיבלת מאחד המדריכים.</p>
-      <label>קוד צוות:
-        <input type="text" id="onb-group-code" placeholder="למשל: team-x7k2m" autocomplete="off">
-      </label>
-      <div id="onb-join-error" class="login-error" hidden></div>
-      <div class="onb-actions" style="margin-top:18px">
-        <button id="onb-do-join" class="primary">🔓 הצטרף</button>
-        <button id="onb-back-2" class="secondary">חזרה</button>
-      </div>
-    </div>
-
-    <div id="onb-done" class="onb-step" hidden>
-      <h2 style="margin-bottom:8px">✅ הצוות מוכן!</h2>
-      <p style="margin-bottom:14px">קוד הצוות שלך:</p>
-      <div class="onb-code-box">
-        <code id="onb-code-display"></code>
-        <button id="onb-copy-code" class="secondary">📋 העתק</button>
-      </div>
-      <p class="hint" style="margin-top:14px;line-height:1.6">
-        שמור/י את הקוד הזה ושלח/י אותו לשאר המדריכים בצוות.
-        הם פותחים את אותו האתר, בוחרים "🔗 הצטרף לצוות קיים" ומזינים את הקוד —
-        וכל השינויים יסתנכרנו ביניכם בזמן אמת.
-      </p>
-      <button id="onb-finish" class="primary" style="margin-top:18px;width:100%">→ המשך לאפליקציה</button>
-    </div>
-  </div>
-</div>
-
-<footer>
-  <p>הנתונים נשמרים בדפדפן שלך. השתמש ב"ייצוא נתונים" כדי לשתף עם מדריכים אחרים.</p>
 </footer>
+
+<!-- floating WhatsApp button -->
+<a class="fab-wa" id="fab-wa" data-lead-place="floating" aria-label="הזמינו עכשיו בוואטסאפ">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.1-1.7-.8-1.9-.9-.3-.1-.4-.1-.6.1-.2.3-.7.9-.8 1-.2.2-.3.2-.5.1-.3-.1-1.2-.4-2.2-1.4-.8-.7-1.4-1.6-1.5-1.9-.2-.3 0-.5.1-.6l.4-.5c.1-.1.2-.3.2-.4.1-.1 0-.3 0-.4-.1-.1-.6-1.4-.8-1.9-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.6.3-.2.3-.8.8-.8 1.9s.8 2.2.9 2.4c.1.2 1.6 2.5 4 3.4.6.2 1 .4 1.3.5.5.2 1 .1 1.4.1.4-.1 1.3-.5 1.5-1 .2-.5.2-1 .1-1.1-.1-.1-.2-.1-.4-.2z"></path><path d="M12 2C6.5 2 2 6.4 2 11.8c0 1.9.5 3.6 1.5 5.2L2 22l5.2-1.4c1.5.8 3.2 1.3 5 1.3 5.5 0 10-4.4 10-9.9C22 6.4 17.5 2 12 2zm0 18c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-3.1.8.8-3-.2-.3C4 14.7 3.6 13.3 3.6 11.8c0-4.6 3.8-8.4 8.4-8.4s8.4 3.7 8.4 8.4c0 4.6-3.8 8.2-8.4 8.2z"></path></svg>
+</a>
+
+<!-- toast for "no phone configured yet" -->
+<div class="toast" id="toast" hidden></div>
+
+<!-- ============================================================ -->
+<!-- ADMIN AREA                                                    -->
+<!-- ============================================================ -->
+<div class="admin-gate" id="admin-gate" hidden>
+  <div class="admin-gate-box">
+    <p class="eyebrow">אזור ניהול</p>
+    <h2>כניסה ללוח הניהול</h2>
+    <form id="admin-login-form">
+      <label>סיסמה
+        <input type="password" id="admin-password-input" autocomplete="current-password" required>
+      </label>
+      <p class="field-error" id="admin-login-error" hidden>סיסמה שגויה, נסו שוב.</p>
+      <div class="admin-gate-actions">
+        <button type="submit" class="btn btn-cta">כניסה</button>
+        <a href="#top" class="btn btn-ghost">חזרה לאתר</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="admin-shell" id="admin-shell" hidden>
+  <aside class="admin-sidebar">
+    <div class="admin-brand">לוח ניהול · <span id="admin-brand-name">יד ועץ</span></div>
+    <nav class="admin-nav">
+      <button class="admin-nav-btn active" data-panel="overview">סקירה כללית</button>
+      <button class="admin-nav-btn" data-panel="content">תוכן ולוגו</button>
+      <button class="admin-nav-btn" data-panel="gallery">גלריית עבודות</button>
+      <button class="admin-nav-btn" data-panel="prices">מחירון</button>
+      <button class="admin-nav-btn" data-panel="settings">סנכרון וסיסמה</button>
+    </nav>
+    <a href="#top" class="btn btn-ghost admin-exit">↩ חזרה לאתר</a>
+  </aside>
+
+  <div class="admin-main">
+    <div class="sync-banner" id="sync-banner" hidden></div>
+
+    <!-- OVERVIEW -->
+    <section class="admin-panel active" data-panel="overview">
+      <h2>סקירה כללית</h2>
+      <div class="stat-row">
+        <div class="stat-tile">
+          <span class="stat-num" id="stat-leads-total">0</span>
+          <span class="stat-label">פניות דרך "הזמינו עכשיו"</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-num" id="stat-leads-week">0</span>
+          <span class="stat-label">פניות ב-7 הימים האחרונים</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-num" id="stat-gallery-count">0</span>
+          <span class="stat-label">תמונות עבודה בגלריה</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-num" id="stat-prices-count">0</span>
+          <span class="stat-label">פריטים במחירון</span>
+        </div>
+      </div>
+      <h3>פניות אחרונות</h3>
+      <p class="hint" id="leads-empty-hint">עדיין אין פניות. ברגע שלקוח ילחץ על "הזמינו עכשיו", הפנייה תופיע כאן.</p>
+      <ul class="leads-list" id="leads-list"></ul>
+    </section>
+
+    <!-- CONTENT -->
+    <section class="admin-panel" data-panel="content">
+      <h2>תוכן האתר ולוגו</h2>
+      <form id="content-form" class="admin-form">
+        <label>שם העסק
+          <input type="text" id="f-business-name" required>
+        </label>
+        <label>משפט פתיחה (מתחת לשם, בעמוד הבית)
+          <textarea id="f-tagline" rows="2" required></textarea>
+        </label>
+        <label>על העסק
+          <textarea id="f-about" rows="6" required></textarea>
+        </label>
+        <div class="logo-editor">
+          <label>לוגו</label>
+          <div class="logo-editor-row">
+            <img id="logo-preview" alt="לוגו" hidden>
+            <span id="logo-preview-fallback">אין לוגו עדיין</span>
+            <input type="file" id="logo-upload" accept="image/*">
+            <button type="button" class="btn btn-ghost btn-sm" id="logo-remove">הסרת לוגו</button>
+          </div>
+          <p class="hint">מומלץ תמונה מרובעת, לפחות 300×300 פיקסלים.</p>
+        </div>
+        <button type="submit" class="btn btn-cta">שמירת תוכן</button>
+        <span class="save-confirm" id="content-save-confirm" hidden>✓ נשמר</span>
+      </form>
+    </section>
+
+    <!-- GALLERY -->
+    <section class="admin-panel" data-panel="gallery">
+      <h2>גלריית עבודות</h2>
+      <p class="hint">התמונות מוצגות באתר לפי הסדר שכאן. אפשר להעלות, לשנות כיתוב, לסדר מחדש או למחוק.</p>
+      <label class="btn btn-cta btn-file">
+        + הוספת תמונה
+        <input type="file" id="gallery-upload" accept="image/*" hidden>
+      </label>
+      <ul class="admin-gallery-list" id="admin-gallery-list"></ul>
+    </section>
+
+    <!-- PRICES -->
+    <section class="admin-panel" data-panel="prices">
+      <h2>מחירון</h2>
+      <p class="hint">כל שורה היא פריט במחירון שמוצג באתר.</p>
+      <ul class="admin-price-list" id="admin-price-list"></ul>
+      <button type="button" class="btn btn-cta" id="price-add-btn">+ הוספת פריט</button>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="admin-panel" data-panel="settings">
+      <h2>פרטי התקשרות</h2>
+      <form id="contact-form" class="admin-form">
+        <label>מספר וואטסאפ להזמנות (מספר ישראלי, למשל 050-1234567)
+          <input type="tel" id="f-phone" placeholder="050-1234567">
+        </label>
+        <label>כתובת (אופציונלי)
+          <input type="text" id="f-address">
+        </label>
+        <label>שעות פעילות (אופציונלי)
+          <input type="text" id="f-hours" placeholder="א׳-ה׳ 9:00-18:00">
+        </label>
+        <label>אינסטגרם — קישור מלא (אופציונלי)
+          <input type="url" id="f-instagram" placeholder="https://instagram.com/...">
+        </label>
+        <button type="submit" class="btn btn-cta">שמירת פרטי התקשרות</button>
+        <span class="save-confirm" id="contact-save-confirm" hidden>✓ נשמר</span>
+      </form>
+
+      <h2>סנכרון בענן (Firebase)</h2>
+      <p class="hint">
+        כברירת מחדל התוכן נשמר בדפדפן הזה בלבד. כדי שהעדכונים שלך יופיעו לכל מי שנכנס לאתר, מכל מכשיר,
+        ושתוכל לראות פניות מכל הלקוחות — יש לחבר פרויקט Firebase חינמי אישי (כ-5 דקות הגדרה, פעם אחת).
+        הסבר מלא ב-README של המאגר.
+      </p>
+      <div id="cloud-disconnected-view">
+        <label>הדבק כאן את firebaseConfig
+          <textarea id="cloud-config-input" rows="6" placeholder='{"apiKey": "...", "projectId": "...", ...}'></textarea>
+        </label>
+        <p class="field-error" id="cloud-error" hidden></p>
+        <button type="button" class="btn btn-cta" id="btn-connect-cloud">התחברות וסנכרון</button>
+      </div>
+      <div id="cloud-connected-view" hidden>
+        <p class="cloud-status-ok">✓ מחובר לסנכרון בענן</p>
+        <button type="button" class="btn btn-ghost" id="btn-disconnect-cloud">ניתוק מהסנכרון</button>
+      </div>
+
+      <h2>שינוי סיסמת ניהול</h2>
+      <form id="password-form" class="admin-form">
+        <label>סיסמה נוכחית
+          <input type="password" id="f-current-password" required autocomplete="current-password">
+        </label>
+        <label>סיסמה חדשה
+          <input type="password" id="f-new-password" required autocomplete="new-password" minlength="4">
+        </label>
+        <p class="field-error" id="password-error" hidden></p>
+        <button type="submit" class="btn btn-cta">עדכון סיסמה</button>
+        <span class="save-confirm" id="password-save-confirm" hidden>✓ עודכן</span>
+      </form>
+    </section>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>
