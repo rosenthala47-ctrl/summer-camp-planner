@@ -8,6 +8,18 @@ const SESSION_ADMIN_KEY = 'woodcraftSite_adminSession_v1';
 const DEFAULT_ADMIN_PASSWORD = '6767';
 const LEADS_LOCAL_CAP = 300;
 
+// Ships with the deployed site once the business's own Firebase project is set up, so every
+// visitor's browser connects automatically to the same shared database - no per-device setup.
+// Leave apiKey empty for a fresh copy of this template that hasn't been connected yet.
+const BUILTIN_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBQKW543LeSOM1b_of7LjMZnKuAFx3Bf5I",
+  authDomain: "gepetto-woodcraft.firebaseapp.com",
+  projectId: "gepetto-woodcraft",
+  storageBucket: "gepetto-woodcraft.firebasestorage.app",
+  messagingSenderId: "1065065484861",
+  appId: "1:1065065484861:web:c854cd1a9a802ae5679054",
+};
+
 const DEFAULT_STATE = {
   site: {
     businessName: 'ג\'פטו אומנות בעץ',
@@ -37,7 +49,7 @@ const DEFAULT_STATE = {
 };
 
 let state = loadState();
-let cloud = { active: false, db: null, fns: null, unsubs: [], applyingRemote: false };
+let cloud = { active: false, db: null, fns: null, unsubs: [], applyingRemote: false, leadsSubActive: false };
 
 function loadState() {
   try {
@@ -251,6 +263,7 @@ function showAdminShell() {
   setPublicSiteVisible(false);
   document.getElementById('admin-gate').hidden = true;
   document.getElementById('admin-shell').hidden = false;
+  ensureLeadsSubscription();
   renderAdminAll();
 }
 
@@ -585,15 +598,20 @@ document.getElementById('password-form').addEventListener('submit', async e => {
 // ============================================================
 function renderCloudPanel() {
   const banner = document.getElementById('sync-banner');
+  const builtin = !!BUILTIN_FIREBASE_CONFIG.apiKey;
+  banner.hidden = false;
   if (cloud.active) {
-    banner.hidden = false;
     banner.textContent = '☁ מחובר לסנכרון בענן — כל השינויים כאן מופיעים באתר החי לכל המבקרים, מכל מכשיר.';
+  } else if (builtin) {
+    banner.textContent = '⚠ הסנכרון המובנה של האתר לא הצליח להתחבר כרגע. בדקו את החיבור לאינטרנט ורעננו את הדף.';
   } else {
-    banner.hidden = false;
     banner.textContent = '⚠ סנכרון בענן לא מחובר. השינויים נשמרים בדפדפן הזה בלבד ולא יופיעו למבקרים אחרים. ראו הסבר בלשונית "סנכרון וסיסמה".';
   }
-  document.getElementById('cloud-disconnected-view').hidden = cloud.active;
+  document.getElementById('cloud-disconnected-view').hidden = cloud.active || builtin;
   document.getElementById('cloud-connected-view').hidden = !cloud.active;
+  document.getElementById('btn-disconnect-cloud').hidden = builtin;
+  document.getElementById('cloud-builtin-note').hidden = !builtin;
+  document.getElementById('cloud-generic-note').hidden = builtin;
 }
 
 async function connectCloud(cfg) {
@@ -646,12 +664,6 @@ async function connectCloud(cfg) {
     state.gallery = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
     saveState(); renderGallery(); renderAdminGalleryList(); renderAdminOverview();
   }));
-  const leadsQuery = query(collection(db, 'leads'), orderBy('ts', 'desc'), limit(20));
-  cloud.unsubs.push(onSnapshot(leadsQuery, snap => {
-    const remoteLeads = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    state.leads = remoteLeads;
-    renderAdminOverview();
-  }));
 
   renderSite(); renderAdminAll();
 }
@@ -661,8 +673,22 @@ function disconnectCloud() {
   cloud.unsubs = [];
   cloud.active = false;
   cloud.db = null;
+  cloud.leadsSubActive = false;
   localStorage.removeItem(CLOUD_CFG_KEY);
   renderCloudPanel();
+}
+
+// Admin-only: the leads collection holds every WhatsApp-CTA click, so only start listening to
+// it once someone has actually opened the admin dashboard - ordinary visitors never need it.
+function ensureLeadsSubscription() {
+  if (!cloud.active || cloud.leadsSubActive) return;
+  cloud.leadsSubActive = true;
+  const { collection, query, orderBy, limit, onSnapshot } = cloud.fns;
+  const leadsQuery = query(collection(cloud.db, 'leads'), orderBy('ts', 'desc'), limit(20));
+  cloud.unsubs.push(onSnapshot(leadsQuery, snap => {
+    state.leads = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAdminOverview();
+  }));
 }
 
 function siteDocPayload() {
@@ -745,7 +771,12 @@ document.getElementById('btn-disconnect-cloud').addEventListener('click', () => 
   if (confirm('לנתק את הסנכרון בענן? השינויים ימשיכו להישמר בדפדפן הזה בלבד.')) disconnectCloud();
 });
 
-async function initCloudFromSaved() {
+async function initCloud() {
+  if (BUILTIN_FIREBASE_CONFIG.apiKey) {
+    try { await connectCloud(BUILTIN_FIREBASE_CONFIG); }
+    catch (e) { console.error('builtin cloud connect failed', e); renderCloudPanel(); }
+    return;
+  }
   const raw = localStorage.getItem(CLOUD_CFG_KEY);
   if (!raw) return;
   try { await connectCloud(JSON.parse(raw)); }
@@ -770,5 +801,5 @@ window.addEventListener('hashchange', handleRoute);
   renderSite();
   wireLeadButtons();
   handleRoute();
-  initCloudFromSaved();
+  initCloud();
 })();
